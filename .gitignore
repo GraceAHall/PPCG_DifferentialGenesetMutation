@@ -1,0 +1,14 @@
+# Nextflow
+.nextflow*
+work
+outputs/
+
+# python environment
+venv
+
+# data
+data/
+data.tar.gz
+
+# misc
+notes.txt
