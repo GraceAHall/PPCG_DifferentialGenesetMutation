@@ -3,11 +3,35 @@
 
 ## Setup
 
+**Data and software** 
+
+This pipeline has been tested on nextflow version 24.10.6 and Python 3.11. 
+
+Multiple pieces of data are required. These should be in a `data/` dir within the pipeline directory. 
+
+Before you start, ensure your workspace has the following structure. 
+
+<pre>
+├── README.md
+├── data
+│   ├── genesets    # gene set lists (only one is used)
+│   ├── indel       # Raw PPCG INDEL VCFs
+│   ├── meta.csv    
+│   ├── scna        # Battenberg SCNA segments
+│   ├── snv         # Raw PPCG SNV VCFs
+│   ├── supporting  # Supporting files
+│   └── sv          # SnpEff annotated SV VCFs
+├── main.nf
+├── modules
+├── nextflow.config
+├── requirements.txt
+├── samplesheet.tsv
+└── templates       # python scripts used in pipeline
+</pre>
 
 
-**Environment**
+**Python Environment**
 
-Pipeline runs using nextflow 24.10.6 and python 3.11. 
 
 Before running the pipeline, please follow these steps. 
 
@@ -27,9 +51,7 @@ Before running the pipeline, please follow these steps.
 
 ## Pipeline Summary
 
-This pipeline performs gene set mutation enrichment between two cohorts.
-
-All settings for each process are available in the `nextflow.config` file and should be tailored to your analysis. 
+This pipeline performs gene set mutation enrichment between two cohorts. All settings for each process are available in the `nextflow.config` file and should be tailored to your analysis. 
 
 Main steps:
 1. Log settings 
@@ -57,7 +79,7 @@ SNV and INDEL variants are extracted from each donor's raw VCF file. ANNOVAR ann
 By default, all coding region variants are extracted (except synonymous variants). UTR, splice, noncoding variants, and upstream/downstream variants can be optionally enabled. Intron variants are not extracted. 
 
 The following `params.seqvar` settings can be customised:
-- `allow_utr`: Include 3' & 5' UTR variants.
+- `allow_utr`: Include 3' and 5' UTR variants.
 - `allow_splice`: Include splicing variants. 
 - `allow_noncoding`: Include noncoding variants. 
 - `allow_intergenic_dist`: Include upsteam/downstream variants within \<dist> of gene.
@@ -106,7 +128,7 @@ These sometimes conflict as symbols can have aliases or be updated / deprecated 
 
 **Selecting gene sets**
 
-Gene sets are selected before downstream analysis. This is to reduce the number of gene sets being assessed. 
+Gene sets are selected before downstream analysis. This is to reduce the number of gene sets being assessed. The choice of parameter values has a huge impact on results. 
 
 There are two provided MSigDB gene set lists in the `data/genesets` folder. 
 - `c2.cp.kegg_medicus.v2024.1.Hs.symbols.tsv` (658 gene sets) <br>Canonical Pathways gene sets derived from the KEGG MEDICUS pathway database.
@@ -123,12 +145,39 @@ The `max_gene_reliance` parameter is especially useful as can be used to remove 
 
 **Differential mutation**
 
+Differential mutation is assessed using logistic regression. This performs the same role as a Fisher test, but includes the mutational burden of each donor as a covariate. I.e. donors with high mutational burden are weighted lower than those with low burden.  
 
-
+Two groups are required - a 'positive' group and a 'negative' group. Eg. for CIN.Cluster-2 in the mutational processes group, the *positive* group is donors marked as CIN.Cluster-2, and the *negative* class is donors in other clusters. 
 
 **Background enrichment**
-This process has the longest runtime by far (scales with `budget`). The `params.background_enrichment.budget` setting controls how many bootstrap samples are performed. A higher budget is a more accurate estimate of the background mutational rate, at the cost of runtime. A minimum of 100 bootstrap samples (budget=100) is recommended for robustness, but feel free to reduce this (eg budget=10) if doing test runs to save time. 
+
+Enrichment above background is a secondary test to ensure that mutations in a given gene set are observed more frequently than pure chance. Bootstrapping is used to permute gene mutation assignments per donor (preserves mutational burden), then a p-value is calculated as the number of bootstrap samples where the number of affected donors is equal or greater than the 'actual' observed data. 
+
+Permutation method during bootstrap sample generation depends on variant class:
+- SNVs/INDELs: Selection probability for a given gene is weighted by cumulative exon length. 
+- SVs: Selection probability for a given gene is weighted by total gene span. 
+- CNA: No probabilities, just randomly select a gene. 
+
+The background enrichment process has the longest runtime by far and scales with the value for `budget`. The `params.background_enrichment.budget` setting controls this value by specifying how many bootstrap samples are performed. A higher budget is a more accurate estimate of the background mutational rate, at the cost of runtime. A minimum of 100 bootstrap samples (budget=100) is recommended for robustness, but feel free to reduce this (eg budget=10) if doing test runs to save time. 
 
 **Summarising results**
-index	obs_donors	obs_proportion	bkg_donors	bkg_proportion	obs_logit_pval	obs_factor	bkg_enrich_factor
+
+The final process collates results into a single table and generates OncoPrints. 
+
+The p-values are unadjusted. The resposibility for multiple testing adjustment falls on the user. This choice has been made as different users may have different methods for adjustment, and may use different schemes when considering the number of 'tests' which have been performed. For example, a reasonable process may be to first remove gene sets not enriched above background within the cohort before considering the differential mutation (logistic regression) results, thus reducing the amount of gene sets being 'tested'. 
+
+OncoPrints are generated using PyComplexHeatmap so that individual mutations can be viewed per gene set. Only the top 'significant' gene sets have an oncoprint generated. The number of OncoPrints to create can be changed using the `params.summarise_results.max_plots` parameter in `nextflow.config`. For example a value of `10` will create oncoprints for the top 10 most significant genesets. 
+
+The final results table has the following fields:
+- *index*: Name of the gene set.
+- *obs_donors*: Number of donors with a mutation in the gene set.
+- *obs_proportion*: Proportion of cohort with a mutation in the gene set.
+- *bkg_donors*: Estimated background number of donors expected to have a mutation by pure chance. 
+- *bkg_proportion*: Estimated background proportion of cohort expected to have a mutation by pure chance. 
+- *obs_logit_pval*: The p-value for trained logistic regression model. 
+- *obs_factor*: Ratio of positive vs negative cohort mutated (proportion of each cohort).
+- *bkg_enrich_factor*: Ratio of positive vs negative cohort mutation above background (proportion of each cohort). 
+
+The `obs_donors`, `obs_proportion`, `bkg_donors` and `bkg_proportion` fields are represented as `<positive> / <negative>`, where *positive* refers to the treatment group, and *negative* refers to the control group. This is to avoid having too many columns in the tsv file. Eg. for CIN.Cluster-2 in the mutational processes group, the *positive* group is donors marked as CIN.Cluster-2, and the *negative* class is donors in other clusters. 
+
 
