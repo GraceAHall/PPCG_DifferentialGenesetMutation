@@ -68,6 +68,7 @@ workflow {
     ch_mutations = MERGE_DONORS.out.merged
     ch_data = HARMONISE_DATA(ch_mutations, genesets, sizes) 
     
+    // TODO merge samples for each donor combimets 
     // TODO filter at later date. 
     // does the CADD feature annotation mirror the VCF ANNOVAR feature annotation? No.
     // ANNOVAR and CADD use different transcripts. 
