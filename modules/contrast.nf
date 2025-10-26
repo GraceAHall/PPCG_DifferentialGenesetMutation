@@ -142,6 +142,7 @@ process SUMMARISE_RESULTS {
 
     script:
     """
+    echo "hihi"
     python ${params.scripts.summarise_results} \
         --posclass ${posclass} \
         --genesets ${genesets} \

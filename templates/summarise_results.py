@@ -211,7 +211,7 @@ def render_oncoprint(unstacked: pd.DataFrame, col_split: pd.DataFrame, tmb_frame
     N_COLS = col_split.shape[0]
     N_ROWS = unstacked['gene'].nunique()
     WIDTH = min(N_COLS/30 + 2, 40)
-    HEIGHT = min(N_ROWS/2 + 1, WIDTH*0.66)
+    HEIGHT = N_ROWS/4 + 1
     plt.figure(figsize=(WIDTH, HEIGHT), dpi=200)
     op=pycomp.oncoPrintPlotter(
         data=unstacked,
