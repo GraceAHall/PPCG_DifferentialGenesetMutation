@@ -129,17 +129,22 @@ process FILTER_VARIANTS_COMBIMETS {
     input:
     path merged_variants
     path trees_dir
-    path clones_dir
+    path ccfs_dir
+    path mettraj_clones
+    path samplesheet
 
     output:
     path "filtered.tsv"
 
     script:
     """
+    echo 'hello'
     python ${params.scripts.filter_variants_combimets} \
         --mutations ${merged_variants} \
         --trees-dir ${trees_dir} \
-        --clones-dir ${clones_dir} \
+        --ccfs-dir ${ccfs_dir} \
+        --mettraj-clones ${mettraj_clones} \
+        --samplesheet ${samplesheet} \
         --outfile filtered.tsv
     """
 

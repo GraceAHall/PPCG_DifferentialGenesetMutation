@@ -110,12 +110,12 @@ process BACKGROUND_ENRICHMENT {
 
     script:
     """
+    echo "hi"
     python ${params.scripts.background_enrichment} \
         --mutations ${posmuts} \
         --genesets ${genesets} \
         --selection ${selection} \
         --sizes ${sizes} \
-        --budget ${params.background_enrichment.budget} \
         --outfile pos.enrich.tsv
     
     python ${params.scripts.background_enrichment} \
@@ -123,7 +123,6 @@ process BACKGROUND_ENRICHMENT {
         --genesets ${genesets} \
         --selection ${selection} \
         --sizes ${sizes} \
-        --budget ${params.background_enrichment.budget} \
         --outfile neg.enrich.tsv
     """
 
@@ -138,11 +137,12 @@ process SUMMARISE_RESULTS {
 
     output:
     path "${posclass}.tsv"
-    path "*.png"
+    path "oncoprints/"
 
     script:
     """
-    echo "hihi"
+    echo "yes"
+    mkdir oncoprints
     python ${params.scripts.summarise_results} \
         --posclass ${posclass} \
         --genesets ${genesets} \

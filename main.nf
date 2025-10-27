@@ -67,12 +67,12 @@ workflow {
         ch_snvs.collect(),
         ch_indels.collect()
     )
-
     if (params.combimets) {
         // assign mutations to clones, then filter to only those in clones on path from trunk to seeds. 
-        ch_trees_dir = Channel.fromPath("${params.basedir}/data/phylogeny/machina_trees", type: 'dir')
-        ch_clones_dir = Channel.fromPath("${params.basedir}/data/phylogeny/dpclust", type: 'dir')
-        ch_mutations = FILTER_VARIANTS_COMBIMETS(MERGE_VARIANTS.out.merged, ch_trees_dir, ch_clones_dir)
+        ch_trees_dir = Channel.fromPath("${params.basedir}/data/phylogeny_angel/trees", type: 'dir')
+        ch_ccfs_dir = Channel.fromPath("${params.basedir}/data/phylogeny_angel/dpclust", type: 'dir')
+        mettraj_clones = file("${params.basedir}/data/phylogeny_angel/met_trajectory_clones.tsv")
+        ch_mutations = FILTER_VARIANTS_COMBIMETS(MERGE_VARIANTS.out.merged, ch_trees_dir, ch_ccfs_dir, mettraj_clones, ch_samplesheet)
     } else {
         // placeholder for now. 
         ch_mutations = FILTER_VARIANTS_GENERIC(MERGE_VARIANTS.out.merged)
