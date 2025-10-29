@@ -88,9 +88,9 @@ process EXTRACT_CNA {
 }
 
 
-process MERGE_DONORS {
+process MERGE_VARIANTS {
 
-    publishDir "${params.outputs_dir}/${params.run_id}/merged_mutations", mode: 'copy'
+    publishDir "${params.outputs_dir}/${params.run_id}/merged_variants", mode: 'copy'
 
     input:
     path svfiles, stageAs: 'svs/*'
@@ -104,13 +104,67 @@ process MERGE_DONORS {
 
     script:
     """
-    python ${params.scripts.merge_donors} \
+    echo 'test'
+    python ${params.scripts.merge_variants} \
         --svdir svs \
         --cnadir cna \
         --snvdir snvs \
         --indeldir indels \
         --outfile merged.tsv \
         --logfile merged.log
+    """
+
+}
+
+
+// does the CADD feature annotation mirror the VCF ANNOVAR feature annotation? No.
+// ANNOVAR and CADD use different transcripts. 
+// CADD scores should be used with caution. 
+// Eg. PPCG0086a - chr1:9664540 G>T (TMEM201). 
+//   - ANNOVAR says 3_prime_UTR_variant, CADD says intron_variant
+process FILTER_VARIANTS_COMBIMETS {
+
+    publishDir "${params.outputs_dir}/${params.run_id}/filtered_variants", mode: 'copy'
+
+    input:
+    path merged_variants
+    path trees_dir
+    path ccfs_dir
+    path mettraj_clones
+    path samplesheet
+
+    output:
+    path "filtered.tsv"
+
+    script:
+    """
+    echo 'hello'
+    python ${params.scripts.filter_variants_combimets} \
+        --mutations ${merged_variants} \
+        --trees-dir ${trees_dir} \
+        --ccfs-dir ${ccfs_dir} \
+        --mettraj-clones ${mettraj_clones} \
+        --samplesheet ${samplesheet} \
+        --outfile filtered.tsv
+    """
+
+}
+
+process FILTER_VARIANTS_GENERIC {
+
+    publishDir "${params.outputs_dir}/${params.run_id}/filtered_variants", mode: 'copy'
+
+    input:
+    path merged_variants
+
+    output:
+    path "filtered.tsv"
+
+    script:
+    """
+    python ${params.scripts.filter_variants_generic} \
+        --mutations ${merged_variants} \
+        --outfile filtered.tsv
     """
 
 }

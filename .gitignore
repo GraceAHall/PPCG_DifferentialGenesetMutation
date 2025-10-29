@@ -12,3 +12,7 @@ data.tar.gz
 
 # misc
 notes.txt
+scripts/
+test/
+temp/
+templates/filter_variants.ipynb

@@ -186,14 +186,15 @@ def log_summary(df: pd.DataFrame, df_exp: pd.DataFrame, args: argparse.Namespace
     sys.stdout = original_stdout
 
 def merge_files(args: argparse.Namespace) -> pd.DataFrame:
-    FIELDS = ['donor', 'coords', 'ref', 'alt', 'gene', 'vclass', 'vtype', 'annotation', 'est_ccf']
+    FIELDS = ['sample', 'donor', 'coords', 'ref', 'alt', 'gene', 'vclass', 'vtype', 'annotation', 'est_ccf']
     merged = pd.DataFrame(columns=FIELDS)
 
     # include SVs for all donors
     for filepath in glob(f"{args.svdir}/*.tsv"):
-        donor = filepath.split('/')[-1].split('.')[0][:8]
+        sample = filepath.split('/')[-1].split('.')[0][:9]
         df = pd.read_csv(filepath, header=0, sep='\t')
-        df['donor'] = donor
+        df['donor'] = sample[:8]
+        df['sample'] = sample
         df['vclass'] = 'SV'
         df['ref'] = '.'
         df['alt'] = '.'
@@ -202,9 +203,10 @@ def merge_files(args: argparse.Namespace) -> pd.DataFrame:
     
     # include CNA events for all donors
     for filepath in glob(f"{args.cnadir}/*.tsv"):
-        donor = filepath.split('/')[-1].split('.')[0][:8]
+        sample = filepath.split('/')[-1].split('.')[0][:9]
         df = pd.read_csv(filepath, header=0, sep='\t')
-        df['donor'] = donor
+        df['donor'] = sample[:8]
+        df['sample'] = sample
         df['vclass'] = 'CNA'
         # df = df.rename(columns={'msubtype': 'annotation', 'mtype': 'vtype'})
         df = df[FIELDS].copy()
@@ -212,9 +214,10 @@ def merge_files(args: argparse.Namespace) -> pd.DataFrame:
     
     # include SNVs for all donors
     for filepath in glob(f"{args.snvdir}/*.tsv"):
-        donor = filepath.split('/')[-1].split('.')[0][:8]
+        sample = filepath.split('/')[-1].split('.')[0][:9]
         df = pd.read_csv(filepath, header=0, sep='\t')
-        df['donor'] = donor
+        df['donor'] = sample[:8]
+        df['sample'] = sample
         df['vclass'] = 'SNV'
         df['vtype'] = 'SNV'
         df = df.rename(columns={'REF': 'ref', 'ALT': 'alt'})
@@ -223,9 +226,10 @@ def merge_files(args: argparse.Namespace) -> pd.DataFrame:
     
     # include INDELs for all donors
     for filepath in glob(f"{args.indeldir}/*.tsv"):
-        donor = filepath.split('/')[-1].split('.')[0][:8]
+        sample = filepath.split('/')[-1].split('.')[0][:9]
         df = pd.read_csv(filepath, header=0, sep='\t')
-        df['donor'] = donor
+        df['donor'] = sample[:8]
+        df['sample'] = sample
         df['vclass'] = 'INDEL'
         df['vtype'] = 'INDEL'
         df = df.rename(columns={'REF': 'ref', 'ALT': 'alt'})

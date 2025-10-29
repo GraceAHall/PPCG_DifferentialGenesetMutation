@@ -22,92 +22,67 @@ def main() -> None:
     diff = diff.set_index('geneset')
     prich = prich.set_index('geneset')
     nrich = nrich.set_index('geneset')
-    prich['pval_fdr'] = stats.false_discovery_control(prich['pval'].to_list())
-    nrich['pval_fdr'] = stats.false_discovery_control(nrich['pval'].to_list())
+    # prich['pval_fdr'] = stats.false_discovery_control(prich['pval'].to_list())
+    # nrich['pval_fdr'] = stats.false_discovery_control(nrich['pval'].to_list())
 
     print(gframe['geneset'].nunique())
     print(sel['geneset'].nunique())
     print(len(sel_genesets))
     gset2genes = gframe[gframe['geneset'].isin(sel_genesets)].groupby('geneset')['gene'].agg(set).to_dict()
 
-    ### MERGE RESULTS
-    sframe = pd.DataFrame(index=sel_genesets)
-    # donors
-    for gset, genes in gset2genes.items():
-        sframe.loc[gset, 'pos_donors_obs'] = pmuts[pmuts['gene'].isin(genes)]['donor'].nunique()
-        sframe.loc[gset, 'neg_donors_obs'] = nmuts[nmuts['gene'].isin(genes)]['donor'].nunique()
-    sframe['pos_donors_obs'] = sframe['pos_donors_obs'].astype(int)
-    sframe['neg_donors_obs'] = sframe['neg_donors_obs'].astype(int)
-
-    # background enrich
-    sframe['pos_donors_bkg'] = prich['bkg_donors']
-    sframe['neg_donors_bkg'] = nrich['bkg_donors']
-    sframe['pos_bkg_enrich_pval'] = prich['pval']
-    sframe['neg_bkg_enrich_pval'] = nrich['pval']
-
-    # cohort enrich
-    sframe['cohort_fisher_pval'] = diff['fisher_pval']
-    sframe['cohort_logit_pval'] = diff['logit_pval']
-    sframe['cohort_logit_converged'] = diff['logit_converged']
-
-    order = [
-        'pos_donors_obs', 'pos_donors_bkg', 'pos_bkg_enrich_pval', 
-        'neg_donors_obs', 'neg_donors_bkg', 'neg_bkg_enrich_pval',
-        'cohort_fisher_pval', 'cohort_logit_pval', 'cohort_logit_converged'
-    ]
-    sframe = sframe[order].copy()
-    sframe = sframe.sort_values('pos_bkg_enrich_pval')
-    assert sframe.isna().sum().sum() == 0
-    print(sframe.shape)
-    print(sframe.head())
-
-    ### FORMAT & FILTER RESULTS 
     n_donors_pos = pmuts['donor'].nunique()
     n_donors_neg = nmuts['donor'].nunique()
     print(f"pos donors: {n_donors_pos}")
     print(f"neg donors: {n_donors_neg}")
 
-    rframe = sframe.copy()
-    rframe['obs_donors'] = rframe['pos_donors_obs'].astype(int).astype(str) + ' / ' + rframe['neg_donors_obs'].astype(int).astype(str)
-    rframe['bkg_donors'] = rframe['pos_donors_bkg'].astype(int).astype(str) + ' / ' + rframe['neg_donors_bkg'].astype(int).astype(str)
+    df = pd.DataFrame(index=sel_genesets)
+    df['obs_treat'] = diff['posclass donors']
+    df['obs_control'] = diff['negclass donors']
+    df['bkg_treat'] = prich['exp_total']
+    df['bkg_control'] = nrich['exp_total']
+    df['diffmut_pval'] = diff['logit_pval']
+    df['bkg_pval_treat'] = prich['pval']
+    df['bkg_pval_control'] = nrich['pval']
+    df['diffmut_factor'] = df['obs_treat'] / df['obs_control']
+    df['bkg_factor_treat'] = prich['factor']
+    df['bkg_factor_control'] = nrich['factor']
 
-    rframe['pos_donors_obs'] = rframe['pos_donors_obs'] / n_donors_pos
-    rframe['neg_donors_obs'] = rframe['neg_donors_obs'] / n_donors_neg
-    rframe['diff_obs_factor'] = rframe['pos_donors_obs'] / rframe['neg_donors_obs']
-    rframe['diff_obs_factor'] = rframe['diff_obs_factor'].apply(lambda x: round(x, 2))
+    # filter
+    def is_valid(row: pd.Series) -> bool:
+        # # has to be significantly enriched in positive cohort. 
+        # if row['diffmut_pval'] > 0.05:
+        #     return False 
+        # has to be enriched above background in positive cohort. 
+        if row['bkg_factor_treat'] < 1:
+            return False 
+        if row['bkg_pval_treat'] > 0.05:
+            return False
+        # can't be observed in negative cohort significantly below expected background rate
+        if row['bkg_factor_control'] < 1 and row['bkg_factor_control'] <= 0.05:
+            return False 
+        return True 
 
-    rframe['pos_donors_bkg'] = rframe['pos_donors_bkg'] / n_donors_pos
-    rframe['neg_donors_bkg'] = rframe['neg_donors_bkg'] / n_donors_neg
-    rframe['pos_factor'] = rframe['pos_donors_obs'] / rframe['pos_donors_bkg']
-    rframe['neg_factor'] = rframe['neg_donors_obs'] / rframe['neg_donors_bkg']
-    rframe['pos_factor'] = rframe['pos_factor'].apply(lambda x: round(x, 2))
-    rframe['neg_factor'] = rframe['neg_factor'].apply(lambda x: round(x, 2))
-    rframe['diff_enrich_factor'] = rframe['pos_factor'] / rframe['neg_factor'].apply(lambda x: max(1, x))
+    # filtering
+    df['valid'] = df.apply(is_valid, axis=1)
+    df = df[df['valid']==True].copy()
+    df = df.drop('valid', axis=1)
+    df['diffmut_pval_fdr'] = stats.false_discovery_control(df['diffmut_pval'].values)
+    df = df[df['diffmut_pval_fdr']<=0.1].copy()
+    df = df.drop('diffmut_pval', axis=1)
 
-    rframe = rframe[rframe['pos_donors_obs']>=rframe['pos_donors_bkg']].copy()
-    rframe = rframe[rframe['cohort_logit_pval']<=0.05].copy()
-    rframe = rframe[rframe['pos_factor']>1]
-    rframe = rframe[rframe['diff_obs_factor']>1]
-    rframe = rframe[rframe['diff_enrich_factor']>1]
+    # sorting
+    mask = df['obs_control']!=0
+    df.loc[mask, 'sort_factor'] = df.loc[mask, 'diffmut_factor'].apply(lambda x: round(x))
+    df.loc[~mask, 'sort_factor'] = df['obs_treat']
+    df['sort_logit'] = df['diffmut_pval_fdr'].apply(lambda x: round(x, 2))
+    df = df.sort_values(['sort_logit', 'sort_factor'], ascending=[True, False])
+    df = df.drop(['sort_logit', 'sort_factor'], axis=1)
 
-    # rframe = rframe.drop(['pos_factor', 'neg_factor', 'pos_bkg_enrich_pval', 'neg_bkg_enrich_pval', 'cohort_fisher_pval', 'cohort_logit_converged'], axis=1)
-    rframe = rframe.rename(columns={
-        'pos_donors_obs': 'obs_pos_prop',
-        'neg_donors_obs': 'obs_neg_prop',
-        'cohort_logit_pval': 'obs_logit_pval',
-        'pos_donors_bkg': 'bkg_pos_prop',
-        'neg_donors_bkg': 'bkg_neg_prop',
-        'diff_obs_factor': 'obs_factor',
-        'diff_enrich_factor': 'bkg_enrich_factor',
-    })
-    rframe['obs_proportion'] = rframe['obs_pos_prop'].round(2).astype(str) + ' / ' + rframe['obs_neg_prop'].round(2).astype(str)
-    rframe['bkg_proportion'] = rframe['bkg_pos_prop'].round(2).astype(str) + ' / ' + rframe['bkg_neg_prop'].round(2).astype(str)
-    rframe = rframe[['obs_donors', 'obs_proportion', 'bkg_donors', 'bkg_proportion',  'obs_logit_pval', 'obs_factor', 'bkg_enrich_factor']]
-    rframe = rframe.sort_values(['obs_logit_pval', 'obs_factor', 'bkg_enrich_factor'], ascending=[True, False, False])
     outfile = f"{args.posclass}.tsv"
+    rframe = df.copy()
     rframe.reset_index().to_csv(outfile, sep='\t', index=False, float_format='%.3f')
     print(rframe.shape)
-    print(rframe.head(10))
+    print(rframe.head(20))
 
     # merge mutations
     POSCLASS = f"{args.posclass} ({n_donors_pos} donors)"
@@ -151,7 +126,7 @@ def main() -> None:
     # OncoPrints
     top_n = rframe.head(args.max_plots).index.to_list()
     for geneset in top_n:
-        outfile = f"{geneset}.png"
+        outfile = f"oncoprints/{geneset}.png"
         unstacked = gen_unstacked(muts, gframe, geneset=geneset, posclass=POSCLASS, negclass=NEGCLASS, cmapper=CMAPPER)
         render_oncoprint(unstacked, col_split, tmb_frame, posclass=POSCLASS, negclass=NEGCLASS, cmapper=CMAPPER, filepath=outfile)
 
@@ -211,7 +186,7 @@ def render_oncoprint(unstacked: pd.DataFrame, col_split: pd.DataFrame, tmb_frame
     N_COLS = col_split.shape[0]
     N_ROWS = unstacked['gene'].nunique()
     WIDTH = min(N_COLS/30 + 2, 40)
-    HEIGHT = min(N_ROWS/2 + 1, WIDTH*0.66)
+    HEIGHT = N_ROWS/4 + 1
     plt.figure(figsize=(WIDTH, HEIGHT), dpi=200)
     op=pycomp.oncoPrintPlotter(
         data=unstacked,

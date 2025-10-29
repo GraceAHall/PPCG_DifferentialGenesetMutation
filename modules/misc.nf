@@ -42,13 +42,14 @@ process LOG_SETTINGS {
     echo "- min_cohort_hitprop: ${params.select_genesets.min_cohort_hitprop}" >> settings.txt
     echo "- max_gene_reliance: ${params.select_genesets.max_gene_reliance}" >> settings.txt
     echo "" >> settings.txt
-
-    echo "Background enrichment" >> settings.txt
-    echo "- budget: ${params.background_enrichment.budget}" >> settings.txt
-    echo "" >> settings.txt
     
     echo "Results summary" >> settings.txt
     echo "- max_plots: ${params.summarise_results.max_plots}" >> settings.txt
     echo "" >> settings.txt
     """
 }
+
+
+    // echo "Background enrichment" >> settings.txt
+    // echo "- budget: ${params.background_enrichment.budget}" >> settings.txt
+    // echo "" >> settings.txt
