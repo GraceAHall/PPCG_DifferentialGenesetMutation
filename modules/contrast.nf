@@ -110,7 +110,6 @@ process BACKGROUND_ENRICHMENT {
 
     script:
     """
-    echo "hi"
     python ${params.scripts.background_enrichment} \
         --mutations ${posmuts} \
         --genesets ${genesets} \
@@ -136,12 +135,14 @@ process SUMMARISE_RESULTS {
     tuple val(posclass), path(posmuts), path(negmuts), path(genesets), path(sizes), path(selection), path(diffmut), path(posenrich), path(negenrich)
 
     output:
-    path "${posclass}.tsv"
+    path "${posclass}.full.tsv"
+    path "${posclass}.sig.tsv"
     path "oncoprints/"
 
     script:
     """
     echo "yes"
+    
     mkdir oncoprints
     python ${params.scripts.summarise_results} \
         --posclass ${posclass} \

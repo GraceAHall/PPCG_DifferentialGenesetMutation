@@ -1,5 +1,6 @@
 
 import re
+import numpy as np
 import pandas as pd 
 import networkx as nx 
 from typing import Tuple
@@ -50,246 +51,271 @@ def load_scna(filepath: str, allow_subclonal: bool) -> pd.DataFrame:
     cnframe = pd.DataFrame.from_records(data, columns=['chr', 'start', 'end', 'nMaj', 'nMin', 'tcn', 'frac_ccf'])
     return cnframe
 
-def load_dpclust_ccfs(filepath: str) -> pd.DataFrame:
-    df = pd.read_csv(filepath, header=0)
-    df = df.rename(columns={'Cluster': 'clone'})
-    df.columns = [x.replace('_DNA', '') for x in df.columns]
-    df['clone'] = df['clone'].astype(str)
-    df['clone'] = df['clone'].apply(lambda x: x.replace('_', ''))
-    df = df.set_index('clone')
-    return df
+#################
+### FILTERING ###
+#################
 
-def load_dpclust_assignments(filepath: str) -> pd.Series:
-    df = pd.read_csv(filepath, header=0)
-    df.columns = [x.lower() if not x.startswith('PPCG') else x for x in df.columns]
-    df.columns = [x.replace('_DNA', '') for x in df.columns]
-    df['cluster'] = df['cluster'].astype(str)
-    df['cluster'] = df['cluster'].apply(lambda x: x.replace('_', ''))
-    df['chr'] = df['chr'].astype(str)
-    df['pos'] = df['pos'].astype(str)
-    df['coords'] = df['chr'] + ':' + df['pos']
-    df = df.set_index('coords')
-    df = df['cluster']
-    return df
+def filter_hypermutators(df: pd.DataFrame, zscore_thresh: float) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    counts = df.drop_duplicates(subset=['donor', 'vclass', 'gene'])['donor'].value_counts()
+  
+    # Modified Z-Score (MAD)
+    median = counts.median()
+    mad = np.median(np.abs(counts - median))
+    
+    # Modified Z-score
+    modified_z_scores = 0.6745 * (counts - median) / mad
+    
+    # Summary
+    results = counts.to_frame()
+    results['modified_z_scores'] = modified_z_scores
+    results['outlier'] = results['modified_z_scores']>zscore_thresh
+    hypermutators = set(results[results['outlier']==True].index.to_list())
+    df_filt = df[~df['donor'].isin(hypermutators)].copy()
 
-def load_clonetree(tree_labels: str, tree_edges: str, tree_dotfile: str, sam2site: str) -> nx.DiGraph:
-    PATTERN_DOTPROP = r'(\d+) \[.*label="([\d\.]+%[^"]*)"\]'
-    PATTERN_DOTEDGE = r'(\d+|X) -> (\d+) \[.*label="([\w^]+)"\]'
-    PATTERN_CLONE = r'(\d+).*'
+    return df_filt, results
 
-    # node sites
-    with open(tree_labels, 'r') as fp:
-        lines = fp.readlines()
-        lines = [ln.strip().split(' ') for ln in lines]
-        site_map: dict[str, str] = {k: v for k, v in lines}
 
-    # leaf node proportions
-    with open(tree_dotfile, 'r') as fp:
-        lines = fp.readlines()
-        lines = [ln.strip() for ln in lines]
+
+# def load_dpclust_ccfs(filepath: str) -> pd.DataFrame:
+#     df = pd.read_csv(filepath, header=0)
+#     df = df.rename(columns={'Cluster': 'clone'})
+#     df.columns = [x.replace('_DNA', '') for x in df.columns]
+#     df['clone'] = df['clone'].astype(str)
+#     df['clone'] = df['clone'].apply(lambda x: x.replace('_', ''))
+#     df = df.set_index('clone')
+#     return df
+
+# def load_dpclust_assignments(filepath: str) -> pd.Series:
+#     df = pd.read_csv(filepath, header=0)
+#     df.columns = [x.lower() if not x.startswith('PPCG') else x for x in df.columns]
+#     df.columns = [x.replace('_DNA', '') for x in df.columns]
+#     df['cluster'] = df['cluster'].astype(str)
+#     df['cluster'] = df['cluster'].apply(lambda x: x.replace('_', ''))
+#     df['chr'] = df['chr'].astype(str)
+#     df['pos'] = df['pos'].astype(str)
+#     df['coords'] = df['chr'] + ':' + df['pos']
+#     df = df.set_index('coords')
+#     df = df['cluster']
+#     return df
+
+# def load_clonetree(tree_labels: str, tree_edges: str, tree_dotfile: str, sam2site: str) -> nx.DiGraph:
+#     PATTERN_DOTPROP = r'(\d+) \[.*label="([\d\.]+%[^"]*)"\]'
+#     PATTERN_DOTEDGE = r'(\d+|X) -> (\d+) \[.*label="([\w^]+)"\]'
+#     PATTERN_CLONE = r'(\d+).*'
+
+#     # node sites
+#     with open(tree_labels, 'r') as fp:
+#         lines = fp.readlines()
+#         lines = [ln.strip().split(' ') for ln in lines]
+#         site_map: dict[str, str] = {k: v for k, v in lines}
+
+#     # leaf node proportions
+#     with open(tree_dotfile, 'r') as fp:
+#         lines = fp.readlines()
+#         lines = [ln.strip() for ln in lines]
         
-        # get leaf node proportions
-        mprops_map = {}
-        for ln in lines:
-            m = re.match(PATTERN_DOTPROP, ln)
-            if m is not None:
-                mnode, props_str = m.group(1), m.group(2)
-                props_l = [float(x.strip('%')) for x in props_str.split('\\n')]
-                maxprop = max(props_l)
-                mprops_map[mnode] = maxprop
+#         # get leaf node proportions
+#         mprops_map = {}
+#         for ln in lines:
+#             m = re.match(PATTERN_DOTPROP, ln)
+#             if m is not None:
+#                 mnode, props_str = m.group(1), m.group(2)
+#                 props_l = [float(x.strip('%')) for x in props_str.split('\\n')]
+#                 maxprop = max(props_l)
+#                 mprops_map[mnode] = maxprop
         
-        cprops_map = {}
-        for ln in lines:
-            m = re.match(PATTERN_DOTEDGE, ln)
-            if m is not None:
-                mnode, node = m.group(2), m.group(3)
-                if mnode in mprops_map:
-                    cprops_map[node] = mprops_map[mnode]
+#         cprops_map = {}
+#         for ln in lines:
+#             m = re.match(PATTERN_DOTEDGE, ln)
+#             if m is not None:
+#                 mnode, node = m.group(2), m.group(3)
+#                 if mnode in mprops_map:
+#                     cprops_map[node] = mprops_map[mnode]
 
-    # graph structure from edgelist
-    smapper = pd.read_csv(sam2site, sep='\t', header=0)
-    site2sample = smapper.set_index('site')['sample'].to_dict()
-    T = nx.DiGraph()
-    with open(tree_edges, 'r') as fp:
-        line = fp.readline().strip()
-        while line:
-            src_label, dest_label = line.split(' ')
-            src_m = re.match(PATTERN_CLONE, src_label)
-            dest_m = re.match(PATTERN_CLONE, dest_label)
-            assert src_m
-            assert dest_m
-            src_clone = src_m.group(1)
-            src_site = site_map[src_label]
-            src_sample = site2sample[src_site]
+#     # graph structure from edgelist
+#     smapper = pd.read_csv(sam2site, sep='\t', header=0)
+#     site2sample = smapper.set_index('site')['sample'].to_dict()
+#     T = nx.DiGraph()
+#     with open(tree_edges, 'r') as fp:
+#         line = fp.readline().strip()
+#         while line:
+#             src_label, dest_label = line.split(' ')
+#             src_m = re.match(PATTERN_CLONE, src_label)
+#             dest_m = re.match(PATTERN_CLONE, dest_label)
+#             assert src_m
+#             assert dest_m
+#             src_clone = src_m.group(1)
+#             src_site = site_map[src_label]
+#             src_sample = site2sample[src_site]
 
-            dest_clone = dest_m.group(1)
-            dest_site = site_map[dest_label]
-            dest_sample = site2sample[dest_site]
+#             dest_clone = dest_m.group(1)
+#             dest_site = site_map[dest_label]
+#             dest_sample = site2sample[dest_site]
 
-            src_prop = None if src_label not in cprops_map else cprops_map[src_label]
-            dest_prop = None if dest_label not in cprops_map else cprops_map[dest_label]
-            T.add_node(src_label, clone=src_clone, site=src_site, sample=src_sample, prop=src_prop)
-            T.add_node(dest_label, clone=dest_clone, site=dest_site, sample=dest_sample, prop=dest_prop)
-            T.add_edge(src_label, dest_label)
+#             src_prop = None if src_label not in cprops_map else cprops_map[src_label]
+#             dest_prop = None if dest_label not in cprops_map else cprops_map[dest_label]
+#             T.add_node(src_label, clone=src_clone, site=src_site, sample=src_sample, prop=src_prop)
+#             T.add_node(dest_label, clone=dest_clone, site=dest_site, sample=dest_sample, prop=dest_prop)
+#             T.add_edge(src_label, dest_label)
 
-            line = fp.readline().strip()
+#             line = fp.readline().strip()
 
-    for node in T.nodes():
-        if T.out_degree(node) == 0:
-            assert T.nodes[node]['prop'] is not None
+#     for node in T.nodes():
+#         if T.out_degree(node) == 0:
+#             assert T.nodes[node]['prop'] is not None
 
-    return T
+#     return T
 
-def modify_structure(T: nx.DiGraph) -> nx.DiGraph:
-    # remove low CCF trunk metastatic events (likely error, they don't make sense, eg PPCG0180)
+# def modify_structure(T: nx.DiGraph) -> nx.DiGraph:
+#     # remove low CCF trunk metastatic events (likely error, they don't make sense, eg PPCG0180)
 
-    T = _remove_lowccf_trunk_metevents(T)
+#     T = _remove_lowccf_trunk_metevents(T)
 
-    # make node sites labelling consistent / sensible. MACHINA has odd output in some cases. 
-    for node in list(T.nodes()):
-        parents = list(T.predecessors(node))
-        assert len(parents) <= 1
-        if _should_reassign_parent(T, node, parents):
-            T = _do_reassign_parent(T, node, parents[0])
+#     # make node sites labelling consistent / sensible. MACHINA has odd output in some cases. 
+#     for node in list(T.nodes()):
+#         parents = list(T.predecessors(node))
+#         assert len(parents) <= 1
+#         if _should_reassign_parent(T, node, parents):
+#             T = _do_reassign_parent(T, node, parents[0])
     
-    # why the fuck is this here again? doing it 2 times? wtf? 
-    for node in list(T.nodes()):
-        parents = list(T.predecessors(node))
-        assert len(parents) <= 1
-        if _should_reassign_parent(T, node, parents):
-            print(f'WARNING: PARENT REASSIGNMENT IN REPEATED LOOP')
-            T = _do_reassign_parent(T, node, parents[0])
+#     # why the fuck is this here again? doing it 2 times? wtf? 
+#     for node in list(T.nodes()):
+#         parents = list(T.predecessors(node))
+#         assert len(parents) <= 1
+#         if _should_reassign_parent(T, node, parents):
+#             print(f'WARNING: PARENT REASSIGNMENT IN REPEATED LOOP')
+#             T = _do_reassign_parent(T, node, parents[0])
     
-    # standardises format for metastatic events.
-    for node in list(T.nodes()):
-        parents = list(T.predecessors(node))
-        assert len(parents) <= 1
-        if _should_add_placeholder(T, node, parents):
-            T = _do_add_placeholder(T, node, parents[0])
+#     # standardises format for metastatic events.
+#     for node in list(T.nodes()):
+#         parents = list(T.predecessors(node))
+#         assert len(parents) <= 1
+#         if _should_add_placeholder(T, node, parents):
+#             T = _do_add_placeholder(T, node, parents[0])
 
-    T = _propagate_proportions(T)
-    T = _prune_leaves(T)
+#     T = _propagate_proportions(T)
+#     T = _prune_leaves(T)
 
-    # validation
-    metevents = _get_seedclones(T)
-    if len(metevents) == 0:
-        raise RuntimeError
+#     # validation
+#     metevents = _get_seedclones(T)
+#     if len(metevents) == 0:
+#         raise RuntimeError
     
-    return T
+#     return T
 
-def _propagate_proportions(T: nx.DiGraph) -> nx.DiGraph:
-    for parent in list(nx.topological_sort(T))[::-1]:
-        if T.out_degree(parent) > 0: # internal and root
-            prop = 0
-            for child in T.successors(parent):
-                if T.nodes[parent]['site'] == T.nodes[child]['site']:
-                    prop += T.nodes[child]['prop']
-            assert prop <= 102
-            prop = min(100, prop)
-            T.nodes[parent]['prop'] = prop 
+# def _propagate_proportions(T: nx.DiGraph) -> nx.DiGraph:
+#     for parent in list(nx.topological_sort(T))[::-1]:
+#         if T.out_degree(parent) > 0: # internal and root
+#             prop = 0
+#             for child in T.successors(parent):
+#                 if T.nodes[parent]['site'] == T.nodes[child]['site']:
+#                     prop += T.nodes[child]['prop']
+#             assert prop <= 102
+#             prop = min(100, prop)
+#             T.nodes[parent]['prop'] = prop 
     
-    return T
+#     return T
 
-def _remove_lowccf_trunk_metevents(T: nx.DiGraph) -> nx.DiGraph:
-    THRESHOLD = 5   # 5% estimated sample CCF
-    root = list(nx.topological_sort(T))[0]
-    leaves = [n for n in T.nodes() if len(list(T.successors(n)))==0]
-    for leaf in leaves:
-        prop = T.nodes[leaf]['prop']
-        if prop is None:
-            print(leaf)
-    leaves = [n for n in leaves if T.nodes[n]['prop']<THRESHOLD]
-    # print('Removing low CCF leaves ---')
-    for leaf in leaves:
-        parents_l = list(T.predecessors(leaf))
-        assert len(parents_l) <= 1
-        parent = parents_l[0]
-        if parent == root and T.nodes[leaf]['site'] != 'prostate':
-            # print(f"Removing {leaf}\t({T.nodes[leaf]['prop']}%)")
-            T.remove_node(leaf)
-    return T
+# def _remove_lowccf_trunk_metevents(T: nx.DiGraph) -> nx.DiGraph:
+#     THRESHOLD = 5   # 5% estimated sample CCF
+#     root = list(nx.topological_sort(T))[0]
+#     leaves = [n for n in T.nodes() if len(list(T.successors(n)))==0]
+#     for leaf in leaves:
+#         prop = T.nodes[leaf]['prop']
+#         if prop is None:
+#             print(leaf)
+#     leaves = [n for n in leaves if T.nodes[n]['prop']<THRESHOLD]
+#     # print('Removing low CCF leaves ---')
+#     for leaf in leaves:
+#         parents_l = list(T.predecessors(leaf))
+#         assert len(parents_l) <= 1
+#         parent = parents_l[0]
+#         if parent == root and T.nodes[leaf]['site'] != 'prostate':
+#             # print(f"Removing {leaf}\t({T.nodes[leaf]['prop']}%)")
+#             T.remove_node(leaf)
+#     return T
 
-def _get_seedclones(T: nx.DiGraph) -> list[Tuple]:
-    events = list()
-    for n1, n2 in T.edges():
-        if T.nodes[n1]['clone'] != T.nodes[n2]['clone']:
-            continue
-        if T.nodes[n1]['site'] == T.nodes[n2]['site']:
-            continue
-        events.append((n1, n2))
-    return events
+# def _get_seedclones(T: nx.DiGraph) -> list[Tuple]:
+#     events = list()
+#     for n1, n2 in T.edges():
+#         if T.nodes[n1]['clone'] != T.nodes[n2]['clone']:
+#             continue
+#         if T.nodes[n1]['site'] == T.nodes[n2]['site']:
+#             continue
+#         events.append((n1, n2))
+#     return events
 
-def _should_reassign_parent(T: nx.DiGraph, node: str, parents: list[str]) -> bool:
-    # checking there is a parent & grandparent
-    if len(parents) != 1:
-        return False
-    parent = parents[0]
-    grandparents = list(T.predecessors(parent)) 
-    if len(grandparents) != 1:
-        return False
-    grandparent = grandparents[0]
+# def _should_reassign_parent(T: nx.DiGraph, node: str, parents: list[str]) -> bool:
+#     # checking there is a parent & grandparent
+#     if len(parents) != 1:
+#         return False
+#     parent = parents[0]
+#     grandparents = list(T.predecessors(parent)) 
+#     if len(grandparents) != 1:
+#         return False
+#     grandparent = grandparents[0]
 
-    # checking the parent only has 1 child
-    peers = list(T.successors(parent))
-    assert len(peers) >= 1
-    if len(peers) != 1:
-        return False
+#     # checking the parent only has 1 child
+#     peers = list(T.successors(parent))
+#     assert len(peers) >= 1
+#     if len(peers) != 1:
+#         return False
     
-    # checking the grandparent and parent have the same site, 
-    # and the child node has a different site
-    grand_site = T.nodes[grandparent]['site']
-    parent_site = T.nodes[parent]['site']
-    child_site = T.nodes[node]['site']
-    if grand_site != parent_site:
-        return False
-    if parent_site == child_site:
-        return False
+#     # checking the grandparent and parent have the same site, 
+#     # and the child node has a different site
+#     grand_site = T.nodes[grandparent]['site']
+#     parent_site = T.nodes[parent]['site']
+#     child_site = T.nodes[node]['site']
+#     if grand_site != parent_site:
+#         return False
+#     if parent_site == child_site:
+#         return False
 
-    return True
+#     return True
 
-def _do_reassign_parent(T: nx.DiGraph, node: str, parent: str) -> nx.DiGraph:
-    T.nodes[parent]['site'] = T.nodes[node]['site']
-    T.nodes[parent]['sample'] = T.nodes[node]['sample']
-    return T
+# def _do_reassign_parent(T: nx.DiGraph, node: str, parent: str) -> nx.DiGraph:
+#     T.nodes[parent]['site'] = T.nodes[node]['site']
+#     T.nodes[parent]['sample'] = T.nodes[node]['sample']
+#     return T
 
-def _should_add_placeholder(T: nx.DiGraph, node: str, parents: list[str]) -> bool:
-    PATTERN = r'^(\d+)\^([a-zA-Z]\w+)$'
-    if len(parents) != 1:
-        return False
-    parent = parents[0]
-    # print(f"parent: {parent}, {T.nodes[parent]['site']}")
-    # print(f"child: {node}, {T.nodes[node]['site']}")
-    # print()
-    if T.nodes[node]['site'] == T.nodes[parent]['site']:
-        return False
-    if re.match(PATTERN, node) is not None:
-        return False
-    return True
+# def _should_add_placeholder(T: nx.DiGraph, node: str, parents: list[str]) -> bool:
+#     PATTERN = r'^(\d+)\^([a-zA-Z]\w+)$'
+#     if len(parents) != 1:
+#         return False
+#     parent = parents[0]
+#     # print(f"parent: {parent}, {T.nodes[parent]['site']}")
+#     # print(f"child: {node}, {T.nodes[node]['site']}")
+#     # print()
+#     if T.nodes[node]['site'] == T.nodes[parent]['site']:
+#         return False
+#     if re.match(PATTERN, node) is not None:
+#         return False
+#     return True
 
-def _do_add_placeholder(T: nx.DiGraph, node: str, parent: str) -> nx.DiGraph:
-    PATTERN = r'^(\d+)_([a-zA-Z]\w+)$'
-    site = T.nodes[node]['site']
-    sample = T.nodes[node]['sample']
-    if re.match(PATTERN, node) is not None:
-        new_node = node.replace('_', '^', 1)
-        new_clone = re.match(PATTERN, node).group(1)  # type: ignore
-    else:
-        new_node = f"{parent}^{site}"
-        new_clone = parent
-    # print(f'adding placeholder for node {node}: {new_clone}')
-    T.add_node(new_node, clone=new_clone, site=site, sample=sample)
-    T.add_edge(parent, new_node)
-    T.add_edge(new_node, node)
-    T.remove_edge(parent, node)
-    return T
+# def _do_add_placeholder(T: nx.DiGraph, node: str, parent: str) -> nx.DiGraph:
+#     PATTERN = r'^(\d+)_([a-zA-Z]\w+)$'
+#     site = T.nodes[node]['site']
+#     sample = T.nodes[node]['sample']
+#     if re.match(PATTERN, node) is not None:
+#         new_node = node.replace('_', '^', 1)
+#         new_clone = re.match(PATTERN, node).group(1)  # type: ignore
+#     else:
+#         new_node = f"{parent}^{site}"
+#         new_clone = parent
+#     # print(f'adding placeholder for node {node}: {new_clone}')
+#     T.add_node(new_node, clone=new_clone, site=site, sample=sample)
+#     T.add_edge(parent, new_node)
+#     T.add_edge(new_node, node)
+#     T.remove_edge(parent, node)
+#     return T
 
-def _prune_leaves(T: nx.DiGraph) -> nx.DiGraph:
-    # pruning leaves
-    leaves = [n for n in T.nodes() if T.out_degree(n) == 0]
-    for leaf in leaves:
-        # print(f'removing leaf: {leaf}')
-        T.remove_node(leaf)
-    return T
+# def _prune_leaves(T: nx.DiGraph) -> nx.DiGraph:
+#     # pruning leaves
+#     leaves = [n for n in T.nodes() if T.out_degree(n) == 0]
+#     for leaf in leaves:
+#         # print(f'removing leaf: {leaf}')
+#         T.remove_node(leaf)
+#     return T
 
 
 ######################
