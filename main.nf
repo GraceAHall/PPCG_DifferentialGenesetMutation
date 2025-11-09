@@ -1,6 +1,8 @@
 
 include { LOG_SETTINGS } from './modules/misc'
 
+include { SNPEFF_DOWNLOAD } from './modules/extract'
+include { SNPEFF_RUN } from './modules/extract'
 include { EXTRACT_STRUCTVARS } from './modules/extract'
 include { EXTRACT_SEQVARS as EXTRACT_SNVS } from './modules/extract'
 include { EXTRACT_SEQVARS as EXTRACT_INDELS } from './modules/extract'
@@ -20,7 +22,7 @@ ch_samplesheet  = Channel.fromPath(params.samplesheet)
 genesets        = file(params.genesets)
 sizes           = file(params.sizes)
 gff             = file(params.refseq_gff_path)
-sv_files        = Channel.fromPath("${params.basedir}/data/sv/*.vcf")
+sv_files        = Channel.fromPath("${params.basedir}/data/sv_old/*.vcf")
 snv_files       = Channel.fromPath("${params.basedir}/data/snv/*.vcf")
 indel_files     = Channel.fromPath("${params.basedir}/data/indel/*.vcf")
 scna_files      = Channel.fromPath("${params.basedir}/data/scna/*.txt")
@@ -56,31 +58,43 @@ workflow {
 
     LOG_SETTINGS()
 
-    // EXTRACT VARIANTS
-    ch_svs      = EXTRACT_STRUCTVARS(ch_svs_raw)
+    // --- EXTRACT VARIANTS --- //
+    // download snpeff database
+    ch_snpeff_dir = SNPEFF_DOWNLOAD()
+    // run snpeff of SV vcf files
+    ch_svs_snpeff = SNPEFF_RUN(ch_svs_raw, ch_snpeff_dir)
+    // extract snvs, indels, svs and cna into standardised .tsv files
+    ch_svs      = EXTRACT_STRUCTVARS(ch_svs_snpeff)
     ch_indels   = EXTRACT_INDELS(ch_indels_raw, 'INDEL')
     ch_snvs     = EXTRACT_SNVS(ch_snvs_raw, 'SNV')
     ch_cna      = EXTRACT_CNA(ch_cna_raw, gff)
+    
+    // merge variants into single table
     MERGE_VARIANTS(
         ch_svs.collect(),
         ch_cna.collect(),
         ch_snvs.collect(),
         ch_indels.collect()
     )
+    
+    // hypermutator filtering
     if (params.combimets) {
-        // assign mutations to clones, then filter to only those in clones on path from trunk to seeds. 
+        // for combimets, additionally assign mutations to clones. 
+        // filter to only mutations in clones on path from trunk to seeds (metastatic trajectory)
         ch_trees_dir = Channel.fromPath("${params.basedir}/data/phylogeny_angel/trees", type: 'dir')
         ch_ccfs_dir = Channel.fromPath("${params.basedir}/data/phylogeny_angel/dpclust", type: 'dir')
         mettraj_clones = file("${params.basedir}/data/phylogeny_angel/met_trajectory_clones.tsv")
         ch_mutations = FILTER_VARIANTS_COMBIMETS(MERGE_VARIANTS.out.merged, ch_trees_dir, ch_ccfs_dir, mettraj_clones, ch_samplesheet)
     } else {
-        // placeholder for now. 
+        // general
         ch_mutations = FILTER_VARIANTS_GENERIC(MERGE_VARIANTS.out.merged)
     }
 
+    // harmonise gene symbols between various data sources
     ch_data = HARMONISE_DATA(ch_mutations, genesets, sizes) 
 
-    // COHORT CONTRASTS
+
+    // --- COHORT CONTRASTS --- //
     // define contrasts 
     ch_cohorts      = ch_samplesheet | splitCsv(header: true, sep: '\t') | map { row -> row.cohort } | unique
     ch_contrasts    = ch_cohorts    | combine(ch_data) | combine(ch_samplesheet) | SPLIT_MUTATIONS

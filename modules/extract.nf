@@ -1,5 +1,67 @@
 
 
+process SNPEFF_DOWNLOAD {
+
+    debug true
+    cpus 1
+    time "20m"
+    memory "4 GB"
+    publishDir "${params.outputs_dir}/${params.run_id}/snpeff_download", mode: 'copy'
+    container 'quay.io/biocontainers/snpeff:5.3.0a--hdfd78af_1'
+    
+    output:
+    path "snpeff_data/GRCh37.75"
+    
+    script:
+    """
+    mkdir snpeff_data
+    snpEff download -v GRCh37.75
+    mv /usr/local/share/snpeff-5.3.0a-1/./data/GRCh37.75 snpeff_data
+    """
+}
+
+process SNPEFF_RUN {
+
+    debug true
+    cpus 1
+    time "20m"
+    memory "8 GB"
+    publishDir "${params.outputs_dir}/${params.run_id}/snpeff_run", mode: 'copy'
+    container 'quay.io/biocontainers/snpeff:5.3.0a--hdfd78af_1'
+    
+    input:
+    tuple val(sample), val(meta), path(vcf)
+    path data_dir
+    
+    output:
+    tuple val(sample), val(meta), path("${sample}.snpEff.vcf")
+    
+    script:
+    """
+    sed 's/chrM/chrMT/' ${vcf} > tmp.vcf
+    snpEff ann -canon -dataDir ${data_dir} GRCh37.75 tmp.vcf > ${sample}.snpEff.vcf
+    """
+}
+
+process EXTRACT_STRUCTVARS {
+
+    publishDir "${params.outputs_dir}/${params.run_id}/sv", mode: 'symlink'
+
+    input:
+    tuple val(sample), val(meta), path(vcf)
+
+    output:
+    path "${sample}.sv.tsv"
+
+    script:
+    """
+    python ${params.scripts.extract_structvars} \
+        --vcf ${vcf} \
+        --outfile ${sample}.sv.tsv
+    """
+
+}
+
 process EXTRACT_SEQVARS {
 
     publishDir "${params.outputs_dir}/${params.run_id}/${vtype.toLowerCase()}", mode: 'symlink'
@@ -27,26 +89,6 @@ process EXTRACT_SEQVARS {
         --allow-intergenic-dist ${params.seqvars.allow_intergenic_dist} \
         --outfile ${sample}.${vtype.toLowerCase()}.tsv
 
-    """
-
-}
-
-
-process EXTRACT_STRUCTVARS {
-
-    publishDir "${params.outputs_dir}/${params.run_id}/sv", mode: 'symlink'
-
-    input:
-    tuple val(sample), val(meta), path(vcf)
-
-    output:
-    path "${sample}.sv.tsv"
-
-    script:
-    """
-    python ${params.scripts.extract_structvars} \
-        --vcf ${vcf} \
-        --outfile ${sample}.sv.tsv
     """
 
 }
@@ -104,7 +146,6 @@ process MERGE_VARIANTS {
 
     script:
     """
-    echo 'test'
     python ${params.scripts.merge_variants} \
         --svdir svs \
         --cnadir cna \
@@ -138,14 +179,15 @@ process FILTER_VARIANTS_COMBIMETS {
 
     script:
     """
-    echo 'hello'
     python ${params.scripts.filter_variants_combimets} \
         --mutations ${merged_variants} \
         --trees-dir ${trees_dir} \
         --ccfs-dir ${ccfs_dir} \
         --mettraj-clones ${mettraj_clones} \
         --samplesheet ${samplesheet} \
-        --outfile filtered.tsv
+        --zscore-thresh ${params.filter_variants.hypermutator_zscore} \
+        --outfile-mutations filtered.tsv \
+        --outfile-summary hypermutators.tsv
     """
 
 }
@@ -164,7 +206,9 @@ process FILTER_VARIANTS_GENERIC {
     """
     python ${params.scripts.filter_variants_generic} \
         --mutations ${merged_variants} \
-        --outfile filtered.tsv
+        --zscore-thresh ${params.filter_variants.hypermutator_zscore} \
+        --outfile-mutations filtered.tsv \
+        --outfile-summary hypermutators.tsv
     """
 
 }

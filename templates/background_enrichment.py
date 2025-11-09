@@ -5,30 +5,42 @@ import numpy as np
 from scipy.stats import binomtest
 # from statsmodels.stats.multitest import multipletests
 
-
 def main() -> None:
     args = load_cmdline_args()
 
-    # load genesets
-    _, gframe = load_genesets(args.genesets, args.selection)
-    all_genesets = sorted(gframe['geneset'].unique())
-
-    # load gene sizes
-    sizes = load_sizes(args.sizes, gframe, all_genesets)
-
-    # load mutations
+    # load data 
+    gframe_full, gframe = load_genesets(args.genesets, args.selection)
+    sizes = pd.read_csv(args.sizes, sep='\t', header=0)
     muts = pd.read_csv(args.mutations, sep='\t', header=0)
     muts = muts[muts['vtype']!='CNApeak'].copy()
+    genelist = generate_genelist(muts, sizes, gframe_full)
+    sizes = sizes.set_index('gene')
 
-    # run enrichment
-    results = run_enrichment(muts, all_genesets, gframe, sizes)
-    results['factor_lvl'] = results['factor'].apply(lambda x: round(x))
-    results = results.sort_values(['pval', 'factor_lvl'], ascending=[True, False])
+    # enrichment
+    counts_obs = calc_observed(muts, genelist, gframe)
+    counts_exp = calc_background(muts, genelist, gframe, sizes)
+    counts = counts_obs.copy()
+    counts['background'] = counts_exp['background']
+    print(counts.head())
+        
+    # final formatting
+    results = counts.copy()
+    n_samples = muts['donor'].nunique()
+    results['pval'] = results.apply(calc_pval, field='total', n_samples=n_samples, axis=1)
+    results['factor'] = results['total'] / results['background']
+    results['factor_lvl'] = results['factor'].apply(lambda x: round(x, 1))
+    results = results.sort_values(['factor_lvl', 'pval'], ascending=[False, True])
     results = results.drop('factor_lvl', axis=1)
     results = results.reset_index()
     results = results.rename(columns={'index': 'geneset'})
     results = results[[x for x in results.columns if x!='geneset']+['geneset']].copy()
     results.to_csv(args.outfile, sep='\t', index=False, float_format='%.3f')
+    print(results.head(20))
+
+
+###############
+### FILE IO ###
+###############
 
 def load_genesets(genesets_path: str, selection_path: str):
     # load data 
@@ -46,108 +58,105 @@ def load_genesets(genesets_path: str, selection_path: str):
     sframe = gframe[gframe['geneset'].isin(sel_genesets)].copy()
     return gframe, sframe
 
-def load_sizes(filepath: str, gframe: pd.DataFrame, all_genesets: list[str]) -> pd.DataFrame:
+def load_sizes(filepath: str) -> pd.DataFrame:
     # load gene length information
     df = pd.read_csv(filepath, sep='\t', header=0)
     df = df.set_index('gene')
+    return df
 
-    # calculate geneset sizes
-    # (cumulative length of each geneset for different variant types)
-    sizes = pd.DataFrame(index=all_genesets, columns=['seqvar', 'structvar', 'CNA'])
-    for geneset in all_genesets:
-        genes = sorted(gframe[gframe['geneset']==geneset]['gene'].unique())
-        sizes.loc[geneset, 'seqvar'] = int(df.loc[genes]['cum_exon_len'].sum())
-        sizes.loc[geneset, 'structvar'] = int(df.loc[genes]['span'].sum())
-        sizes.loc[geneset, 'CNA'] = int(df.loc[genes]['span'].sum())
-    return sizes
+def generate_genelist(muts: pd.DataFrame, sizes: pd.DataFrame, gframe: pd.DataFrame) -> list[str]:
+    # load gene length information
+    gset_genes = set(gframe['gene'].unique())
+    size_genes = set(sizes['gene'].unique())
+    mut_genes = set(muts['gene'].unique())
+    all_genes = gset_genes | size_genes | mut_genes
+    return sorted(list(all_genes))
 
-def run_enrichment(table: pd.DataFrame, all_genesets: list[str], gframe: pd.DataFrame, size_frame: pd.DataFrame) -> pd.DataFrame:
 
-    # observed counts
-    counts = calc_observed(table, all_genesets, gframe)
-    print()
-    print(counts.head(20))
-    
-    # background counts
+##################
+### ENRICHMENT ###
+##################
+
+def gen_dtable(muts: pd.DataFrame, genelist: list[str]) -> pd.DataFrame:
+    donors = sorted(list(muts['donor'].unique()))
+    dtable = pd.DataFrame(index=genelist)
+    donors2genes = muts.groupby('donor')['gene'].agg(set)
+    i = 0
+    for donor in donors:
+        genes = sorted(list(donors2genes[donor]))
+        dtable[donor] = 0
+        dtable.loc[genes, donor] = 1
+        i += 1
+        if i % 50 == 0:
+            dtable = dtable.copy()
+    return dtable
+
+def calc_observed(table: pd.DataFrame, genelist: list[str], gframe: pd.DataFrame) -> pd.DataFrame:
     runs = [
-        (['SNV', 'INDEL'], 'seqvar'), 
-        (['SV'], 'structvar'), 
-        (['CNA'], 'CNA'), 
-    ]
-
-    # calc expected background individually for seqvars/structvars/CNA. 
-    all_donors = sorted(table['donor'].unique())
-    for vclasses, mtype in runs:
-
-        # generate binary matrix        
-        df = table[table['vclass'].isin(vclasses)].copy()
-        dtable = pd.DataFrame(data=0, index=all_genesets, columns=all_donors)
-        for donor in all_donors:
-            genes = sorted(list(df[df['donor']==donor]['gene'].unique()))
-            gsets = sorted(list(gframe[gframe['gene'].isin(genes)]['geneset'].unique()))
-            dtable.loc[gsets, donor] = 1
-        
-        # prepare final inputs 
-        mutation_matrix = dtable.to_numpy()
-        gset_names = dtable.index.to_list()
-        gset_lengths = [int(size_frame.loc[gset, mtype]) for gset in gset_names]
-
-        # do the calculation
-        results = calc_background(mutation_matrix, np.array(gset_lengths), np.array(gset_names))
-        results = results.set_index('name')
-        # counts[f"obs_{mtype}"] = results['observed_mutations']
-        counts[f"exp_{mtype}"] = results['expected_mutations']
-
-    # combine results from each variant class
-    n_samples = len(all_donors)
-    print()
-    print(n_samples)
-    print(counts.sort_values('obs_total', ascending=False).head(10))
-    exp_cols = [x for x in counts.columns if x.startswith('exp_')]
-    print()
-    print(exp_cols)
-    counts['exp_total'] = counts.apply(calc_exp_total, n_samples=n_samples, exp_cols=exp_cols, axis=1)
-    counts['pval'] = counts.apply(calc_pval, n_samples=n_samples, axis=1)
-
-    # calculate fold enrichment 
-    mask = counts['exp_total']>0
-    counts.loc[mask, 'factor'] = counts.loc[mask, 'obs_total'] / counts.loc[mask, 'exp_total']
-    counts.loc[~mask, 'factor'] = np.inf
-    counts = counts.sort_values('pval')
-
-    # return
-    return counts
-
-def calc_exp_total(row: pd.Series, n_samples: int, exp_cols: list[str]) -> float:
-    a = row[exp_cols[0]] / n_samples
-    for i in range(1, len(exp_cols)):
-        b = row[exp_cols[i]] / n_samples
-        t = a*b 
-        u = b-t 
-        a = a+u 
-    return a * n_samples
-
-def calc_observed(table: pd.DataFrame, all_genesets: list[str], gframe: pd.DataFrame) -> pd.DataFrame:
-    runs = [
-        (['SNV', 'INDEL'], 'seqvar'), 
-        (['SV'], 'structvar'), 
+        (['SNV'], 'SNV'), 
+        (['INDEL'], 'INDEL'), 
+        (['SV'], 'SV'), 
         (['CNA'], 'CNA'), 
         (['SNV', 'INDEL', 'SV', 'CNA'], 'total'), 
     ]
-    counts = pd.DataFrame(index=all_genesets)
+    genesets = sorted(list(gframe['geneset'].unique()))
+    gset2genes = gframe.groupby('geneset')['gene'].agg(set)
+    counts = pd.DataFrame(index=genesets)
 
     # calc expected background individually for seqvars/structvars/CNA. 
     for vclasses, mtype in runs:
         df = table[table['vclass'].isin(vclasses)].copy()
-        for geneset in all_genesets:
-            genes = list(gframe[gframe['geneset']==geneset]['gene'].unique())
-            n_donors = df[df['gene'].isin(genes)]['donor'].nunique()
-            counts.loc[geneset, f"obs_{mtype}"] = n_donors 
-        counts[f"obs_{mtype}"] = counts[f"obs_{mtype}"].astype(int)
+        dtable = gen_dtable(df, genelist)
+        for gset in genesets:
+            genes = sorted(list(gset2genes[gset]))
+            dslice = dtable.loc[genes]
+            n_donors = dslice.sum().clip(0, 1).sum()
+            counts.loc[gset, mtype] = n_donors 
+        counts[mtype] = counts[mtype].astype(int)
     assert counts.isna().sum().sum() == 0
     return counts 
 
-def calc_background(mutation_matrix, gene_lengths, gene_names) -> pd.DataFrame:
+def calc_background(table: pd.DataFrame, genelist: list[str], gframe: pd.DataFrame, sizes: pd.DataFrame) -> pd.DataFrame:
+    runs = [
+        (['SNV', 'INDEL'], 'snv/indel'), 
+        (['SV', 'CNA'], 'sv/cna'), 
+    ]
+
+    # calc expected background individually for seqvars/structvars/CNA.
+    n_samples = table['donor'].nunique()
+    expect = pd.DataFrame(index=genelist)
+    for vclasses, mtype in runs:
+        df = table[table['vclass'].isin(vclasses)].copy()
+        dtable = gen_dtable(df, genelist)
+        
+        # prepare final inputs 
+        mutation_matrix = dtable.to_numpy()
+        size_field = 'cum_exon_len' if mtype == 'snv/indel' else 'span'
+        gene_names = dtable.index.to_list()
+        gene_lengths = [int(sizes.loc[gene, size_field]) for gene in genelist]
+
+        # do the calculation
+        results = _do_background(mutation_matrix, np.array(gene_lengths), np.array(gene_names))
+        results = results.set_index('name')
+        expect[f"obs. {mtype}"] = results['observed_mutations']
+        expect[f"exp. {mtype}"] = results['expected_mutations']
+
+    exp_cols = [x for x in expect.columns if x.startswith('exp. ')]
+    expect['exp. total'] = expect.apply(calc_exp_total, n_samples=n_samples, exp_cols=exp_cols, axis=1)
+    # print()
+    # print(expect.head(10))
+
+    genesets = sorted(list(gframe['geneset'].unique()))
+    gset2genes = gframe.groupby('geneset')['gene'].agg(set)
+    counts = pd.DataFrame(index=genesets)
+    for gset in genesets:
+        genes = sorted(list(gset2genes[gset]))
+        counts.loc[gset, 'background'] = expect.loc[genes, 'exp. total'].sum()
+
+    assert counts.isna().sum().sum() == 0
+    return counts 
+
+def _do_background(mutation_matrix, gene_lengths, gene_names) -> pd.DataFrame:
     n_genes, n_samples = mutation_matrix.shape
         
     # Per-sample mutation counts
@@ -188,9 +197,18 @@ def calc_background(mutation_matrix, gene_lengths, gene_names) -> pd.DataFrame:
     df = df.drop('gene_idx', axis=1)
     return df 
 
-def calc_pval(row: pd.Series, n_samples: int) -> float:
-    obs = int(row['obs_total'])
-    expected = float(row['exp_total'])
+def calc_exp_total(row: pd.Series, n_samples: int, exp_cols: list[str]) -> float:
+    a = row[exp_cols[0]] / n_samples
+    for i in range(1, len(exp_cols)):
+        b = row[exp_cols[i]] / n_samples
+        t = a*b 
+        u = b-t 
+        a = a+u 
+    return a * n_samples
+
+def calc_pval(row: pd.Series, field: str, n_samples: int) -> float:
+    obs = int(row[field])
+    expected = float(row['background'])
     
     # Background rate per sample
     background_rate = expected / n_samples
@@ -199,6 +217,10 @@ def calc_pval(row: pd.Series, n_samples: int) -> float:
     p_val = binomtest(obs, n_samples, background_rate, alternative='two-sided').pvalue
     return float(p_val)
 
+
+####################
+### CMDLINE ARGS ###
+####################
 
 
 def load_cmdline_args() -> argparse.Namespace:

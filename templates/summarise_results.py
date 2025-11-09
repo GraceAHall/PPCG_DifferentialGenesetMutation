@@ -28,7 +28,6 @@ def main() -> None:
     print(gframe['geneset'].nunique())
     print(sel['geneset'].nunique())
     print(len(sel_genesets))
-    gset2genes = gframe[gframe['geneset'].isin(sel_genesets)].groupby('geneset')['gene'].agg(set).to_dict()
 
     n_donors_pos = pmuts['donor'].nunique()
     n_donors_neg = nmuts['donor'].nunique()
@@ -38,14 +37,22 @@ def main() -> None:
     df = pd.DataFrame(index=sel_genesets)
     df['obs_treat'] = diff['posclass donors']
     df['obs_control'] = diff['negclass donors']
-    df['bkg_treat'] = prich['exp_total']
-    df['bkg_control'] = nrich['exp_total']
+    df['bkg_treat'] = prich['background']
+    df['bkg_control'] = nrich['background']
     df['diffmut_pval'] = diff['logit_pval']
     df['bkg_pval_treat'] = prich['pval']
     df['bkg_pval_control'] = nrich['pval']
     df['diffmut_factor'] = df['obs_treat'] / df['obs_control']
     df['bkg_factor_treat'] = prich['factor']
     df['bkg_factor_control'] = nrich['factor']
+    
+    # sorting
+    mask = df['obs_control']!=0
+    df.loc[mask, 'sort_factor'] = df.loc[mask, 'diffmut_factor'].apply(lambda x: round(x))
+    df.loc[~mask, 'sort_factor'] = df['obs_treat']
+    df['sort_logit'] = df['diffmut_pval'].apply(lambda x: round(x, 2))
+    df = df.sort_values(['sort_logit', 'sort_factor'], ascending=[True, False])
+    df = df.drop(['sort_logit', 'sort_factor'], axis=1)
 
     # filter
     def is_valid(row: pd.Series) -> bool:
@@ -63,27 +70,26 @@ def main() -> None:
         return True 
 
     # filtering
-    df['valid'] = df.apply(is_valid, axis=1)
-    df = df[df['valid']==True].copy()
-    df = df.drop('valid', axis=1)
-    df['diffmut_pval_fdr'] = stats.false_discovery_control(df['diffmut_pval'].values)
-    df = df[df['diffmut_pval_fdr']<=0.1].copy()
-    df = df.drop('diffmut_pval', axis=1)
+    df_full = df.copy()
+    df_sig = df.copy()
+    df_sig['valid'] = df_sig.apply(is_valid, axis=1)
+    df_sig = df_sig[df_sig['valid']==True].copy()
+    df_sig = df_sig.drop('valid', axis=1)
+    df_sig['diffmut_pval_fdr'] = stats.false_discovery_control(df_sig['diffmut_pval'].values)
+    df_sig = df_sig[df_sig['diffmut_pval_fdr']<=0.1].copy()
+    df_sig = df_sig.drop('diffmut_pval', axis=1)
 
-    # sorting
-    mask = df['obs_control']!=0
-    df.loc[mask, 'sort_factor'] = df.loc[mask, 'diffmut_factor'].apply(lambda x: round(x))
-    df.loc[~mask, 'sort_factor'] = df['obs_treat']
-    df['sort_logit'] = df['diffmut_pval_fdr'].apply(lambda x: round(x, 2))
-    df = df.sort_values(['sort_logit', 'sort_factor'], ascending=[True, False])
-    df = df.drop(['sort_logit', 'sort_factor'], axis=1)
-
-    outfile = f"{args.posclass}.tsv"
-    rframe = df.copy()
-    rframe.reset_index().to_csv(outfile, sep='\t', index=False, float_format='%.3f')
-    print(rframe.shape)
-    print(rframe.head(20))
-
+    # write to file
+    rframe = df_sig.copy()
+    outfile_full = f"{args.posclass}.full.tsv"
+    outfile_sig = f"{args.posclass}.sig.tsv"
+    df_full = df_full.reset_index()
+    df_sig = df_sig.reset_index()
+    df_full = df_full[[x for x in df_full.columns if x!='index']+['index']]
+    df_sig = df_sig[[x for x in df_sig.columns if x!='index']+['index']]
+    df_full.to_csv(outfile_full, sep='\t', index=False, float_format='%.3f')
+    df_sig.to_csv(outfile_sig, sep='\t', index=False, float_format='%.3f')
+    
     # merge mutations
     POSCLASS = f"{args.posclass} ({n_donors_pos} donors)"
     NEGCLASS = f"Others ({n_donors_neg} donors)"
