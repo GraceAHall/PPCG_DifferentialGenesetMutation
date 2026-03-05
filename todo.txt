@@ -1,0 +1,25 @@
+
+1. Meet with Geoff to create plan
+2. Create the final figures / sections 
+3. Ensure reviewer comments are addressed
+4. Make code uniform and available in github repositories
+
+
+TODO 
+- redo CNA extraction as annotation==CNAgene is most common hgnc_id issue. 
+- swap SNPEFF to use gencode GRCh37.v31
+
+
+
+Current HGNC ids are used as the background genelist. 
+Only protein-coding genes are considered. 
+Only mutated genes which can be linked to hgnc_id are kept.
+Only geneset genes which can be linked to hgnc_id are kept.
+
+hgnc: 19291 genes
+gff3: 19100 genes can be mapped to hgnc_id
+
+99% (19100/19291) of hgnc genes have size information. 
+
+
+

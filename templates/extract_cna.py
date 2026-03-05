@@ -1,5 +1,6 @@
 
 import re 
+import sys
 import argparse
 import pandas as pd 
 from abc import ABC, abstractmethod
@@ -15,8 +16,20 @@ from utils import load_scna
 def main() -> None:
     args = load_cmdline_args()
     segs = load_scna(args.scna, allow_subclonal=args.allow_subclonal)
-    gff = load_gff(args.gff, args.allow_noncoding, args.allow_x)
-    table = extract(segs, gff, args)
+    
+    # print()
+    # print(segs.shape)
+    # print(segs.head(10))
+    
+    # gff = load_gff_refseq(args.gff, args.allow_noncoding, args.allow_x)
+    gff = load_gff_gencode(args.gff, args.allow_noncoding, args.allow_x)
+
+    # print()
+    # print(gff.shape)
+    # print(gff.head(10))
+    
+    # table = extract_refseq(segs, gff, args)
+    table = extract_gencode(segs, gff, args)
     table.to_csv(args.outfile, sep='\t', index=False)
 
 
@@ -24,7 +37,7 @@ def main() -> None:
 ### FILE IO ###
 ###############
 
-def load_gff(filepath: str, allow_noncoding: bool, allow_x: bool) -> pd.DataFrame:
+def load_gff_refseq(filepath: str, allow_noncoding: bool, allow_x: bool) -> pd.DataFrame:
 
     def get_chrom(seqid: str) -> str:
         lut = {23: 'X', 24: 'Y'}
@@ -69,6 +82,65 @@ def load_gff(filepath: str, allow_noncoding: bool, allow_x: bool) -> pd.DataFram
     df['span'] = df['end'] - df['start']
     df = df[['chr', 'start', 'end', 'span', 'gene']].copy()
     return df 
+
+def load_gff_gencode(filepath: str, allow_noncoding: bool, allow_x: bool=False, allow_y: bool=False) -> pd.DataFrame:
+
+    def get_name(text: str) -> str:
+        PATTERN = r'^.*?gene_name=([A-Za-z0-9_\.-]+).*?$'
+        m = re.match(PATTERN, text)
+        assert m is not None
+        return m.group(1)
+
+    def get_gtype(text: str) -> str:
+        PATTERN = r'^.*?gene_type=([A-Za-z0-9_-]+).*?$'
+        m = re.match(PATTERN, text)
+        assert m is not None
+        return m.group(1)
+
+    data = []
+    with open(filepath, 'r') as fp:
+        line = fp.readline().strip('\n')
+        i = 0
+        while line:
+            if line.startswith('#'):
+                line = fp.readline().strip('\n')
+                continue 
+            
+            i += 1
+            if i % 10_000 == 0:
+                print(f"processed {i} records...", end='\r')
+            
+            lsplit = line.split('\t')
+            chrom = lsplit[0].replace('chr', '')
+
+            if lsplit[2] != 'gene':
+                line = fp.readline().strip('\n')
+                continue
+            if chrom == 'X' and not allow_x:
+                line = fp.readline().strip('\n')
+                continue 
+            if chrom == 'Y' and not allow_y:
+                line = fp.readline().strip('\n')
+                continue 
+            
+            start = int(lsplit[3])
+            end = int(lsplit[4])
+            gene = get_name(lsplit[8])
+            gtype = get_gtype(lsplit[8])
+
+            if gtype == 'protein_coding' or allow_noncoding:
+                data.append((chrom, start, end, gene))
+
+            line = fp.readline().strip('\n')
+
+    print(f"processed {i} records... done")
+    df = pd.DataFrame.from_records(data, columns=['chr', 'start', 'end', 'gene'])
+    df['chr'] = df['chr'].astype(str)
+    df['start'] = df['start'].astype(int)
+    df['end'] = df['end'].astype(int)
+    df['gene'] = df['gene'].astype(str)
+    return df
+
 
 
 ############################
@@ -121,17 +193,7 @@ class DeepDelValidator(CNAEventValidator):
 ### EXTRACTION ###
 ##################
 
-def get_genes(seg: pd.Series, gff: pd.DataFrame, min_span: float) -> set[str]:
-    gslice = gff[(gff['chr']==seg.chr) & (gff['start']<seg.end) & (gff['end']>seg.start)]
-    out = set()
-    for rec in gslice.itertuples():
-        thresh = min_span * rec.span
-        overlap = min(rec.end, seg.end) - max(rec.start, seg.start)
-        if overlap >= thresh:
-            out.add(rec.gene) 
-    return out
-
-def extract(segs: pd.DataFrame, gff: pd.DataFrame, args: argparse.Namespace) -> pd.DataFrame:
+def extract_refseq(segs: pd.DataFrame, gff: pd.DataFrame, args: argparse.Namespace) -> pd.DataFrame:
     validator_lut = dict()
     if args.allow_amp: 
         validator_lut['CNA↑'] = AmpValidator
@@ -155,6 +217,61 @@ def extract(segs: pd.DataFrame, gff: pd.DataFrame, args: argparse.Namespace) -> 
             genes = get_genes(row, gff, args.min_span)
             for gene in genes:
                 data.append((coords, '.', '.', gene, vtype, 'CNAgene', round(row['frac_ccf'], 2)))
+
+    table = pd.DataFrame.from_records(data, columns=['coords', 'ref', 'alt', 'gene', 'vtype', 'annotation', 'est_ccf'])
+    return table
+
+def get_genes(seg: pd.Series, gff: pd.DataFrame, min_span: float) -> set[str]:
+    gslice = gff[(gff['chr']==seg.chr) & (gff['start']<seg.end) & (gff['end']>seg.start)]
+    out = set()
+    for rec in gslice.itertuples():
+        thresh = min_span * rec.span
+        overlap = min(rec.end, seg.end) - max(rec.start, seg.start)
+        if overlap >= thresh:
+            out.add(rec.gene) 
+    return out
+
+def extract_gencode(segs: pd.DataFrame, gff: pd.DataFrame, args: argparse.Namespace) -> pd.DataFrame:
+    shared_chroms = sorted(list(set(segs['chr'].unique()) & set(gff['chr'].unique())))
+    
+    validator_lut = dict()
+    if args.allow_amp: 
+        validator_lut['CNA↑'] = AmpValidator
+    if args.allow_shallow_del: 
+        validator_lut['CNA↓'] = ShallowDelValidator
+    if args.allow_deep_del:
+        validator_lut['CNA↓↓'] = DeepDelValidator
+
+    data = []
+    # iterate allowed variant types
+    for vtype, validator_c in validator_lut.items():
+        validator = validator_c()
+
+        # iter chroms (performance)        
+        for chrom in shared_chroms:
+            gslice = gff[gff['chr']==chrom]
+            sslice = segs[segs['chr']==chrom]
+
+            # get segments in this chromosome which are valid (meets the CNA criteria)
+            sslice['PASS'] = sslice.apply(validator.validate, wgd=args.wgd, axis=1)
+            sslice = sslice[sslice['PASS']==True]
+            
+            for gene in gslice.itertuples():
+                cnas = sslice[(sslice['start']<gene.end) & (sslice['end']>gene.start)].copy()
+
+                if cnas.shape[0] == 0:
+                    continue 
+                
+                cnas['start'] = cnas['start'].clip(lower=gene.start)
+                cnas['end'] = cnas['end'].clip(upper=gene.end)
+                cnas['span'] = cnas['end'] - cnas['start']
+                gspan = gene.end - gene.start
+                sspan = cnas['span'].sum()
+                thresh = args.min_span * gspan
+                if sspan >= thresh:
+                    coords = gene.chr + ':' + str(gene.start) + '-' + str(gene.end)
+                    ccf = round(cnas['frac_ccf'].mean(), 2)
+                    data.append((coords, '.', '.', gene.gene, vtype, 'CNAgene', ccf))
 
     table = pd.DataFrame.from_records(data, columns=['coords', 'ref', 'alt', 'gene', 'vtype', 'annotation', 'est_ccf'])
     return table

@@ -6,7 +6,7 @@ process SNPEFF_DOWNLOAD {
     cpus 1
     time "20m"
     memory "4 GB"
-    publishDir "${params.outputs_dir}/${params.run_id}/snpeff_download", mode: 'copy'
+    publishDir "${params.outputs_dir}/${params.run_id}/variant_extraction/snpeff_download", mode: 'copy'
     container 'quay.io/biocontainers/snpeff:5.3.0a--hdfd78af_1'
     
     output:
@@ -26,7 +26,7 @@ process SNPEFF_RUN {
     cpus 1
     time "20m"
     memory "8 GB"
-    publishDir "${params.outputs_dir}/${params.run_id}/snpeff_run", mode: 'copy'
+    publishDir "${params.outputs_dir}/${params.run_id}/variant_extraction/snpeff_run", mode: 'copy'
     container 'quay.io/biocontainers/snpeff:5.3.0a--hdfd78af_1'
     
     input:
@@ -45,7 +45,7 @@ process SNPEFF_RUN {
 
 process EXTRACT_STRUCTVARS {
 
-    publishDir "${params.outputs_dir}/${params.run_id}/sv", mode: 'symlink'
+    publishDir "${params.outputs_dir}/${params.run_id}/variant_extraction/sv", mode: 'symlink'
 
     input:
     tuple val(sample), val(meta), path(vcf)
@@ -64,7 +64,7 @@ process EXTRACT_STRUCTVARS {
 
 process EXTRACT_SEQVARS {
 
-    publishDir "${params.outputs_dir}/${params.run_id}/${vtype.toLowerCase()}", mode: 'symlink'
+    publishDir "${params.outputs_dir}/${params.run_id}/variant_extraction/${vtype.toLowerCase()}", mode: 'symlink'
 
     input:
     tuple val(sample), val(meta), path(vcf), path(scna)
@@ -95,7 +95,7 @@ process EXTRACT_SEQVARS {
 
 process EXTRACT_CNA {
 
-    publishDir "${params.outputs_dir}/${params.run_id}/cna", mode: 'symlink'
+    publishDir "${params.outputs_dir}/${params.run_id}/variant_extraction/cna", mode: 'symlink'
 
     input:
     tuple val(sample), val(meta), path(scna)
@@ -132,7 +132,7 @@ process EXTRACT_CNA {
 
 process MERGE_VARIANTS {
 
-    publishDir "${params.outputs_dir}/${params.run_id}/merged_variants", mode: 'copy'
+    publishDir "${params.outputs_dir}/${params.run_id}/variant_processing", mode: 'copy'
 
     input:
     path svfiles, stageAs: 'svs/*'
@@ -141,8 +141,8 @@ process MERGE_VARIANTS {
     path indelfiles, stageAs: 'indels/*'
 
     output:
-    path "merged.tsv", emit: merged
-    path "merged.log", emit: log
+    path "mutations.merged.tsv", emit: merged
+    path "mutations.merged.log", emit: log
 
     script:
     """
@@ -151,21 +151,48 @@ process MERGE_VARIANTS {
         --cnadir cna \
         --snvdir snvs \
         --indeldir indels \
-        --outfile merged.tsv \
-        --logfile merged.log
+        --outfile mutations.merged.tsv \
+        --logfile mutations.merged.log
     """
 
 }
 
+process STANDARDISE_AND_FILTER_VARIANTS {
+
+    publishDir "${params.outputs_dir}/${params.run_id}/variant_processing", mode: 'symlink'
+
+    input:
+    path mutations
+    path genesets
+    path gff
+    path hgnc
+
+    output:
+    tuple path('mutations.filtered.tsv'), path('genesets.tsv'), path('sizes.tsv')
+
+    script:
+    """
+    python ${params.scripts.standardise_filter_variants} \
+        --mutations ${mutations} \
+        --genesets ${genesets} \
+        --gff ${gff} \
+        --hgnc ${hgnc} \
+        --outfile-muts mutations.filtered.tsv \
+        --outfile-gsets genesets.tsv \
+        --outfile-sizes sizes.tsv
+
+    """
+
+}
 
 // does the CADD feature annotation mirror the VCF ANNOVAR feature annotation? No.
 // ANNOVAR and CADD use different transcripts. 
 // CADD scores should be used with caution. 
 // Eg. PPCG0086a - chr1:9664540 G>T (TMEM201). 
 //   - ANNOVAR says 3_prime_UTR_variant, CADD says intron_variant
-process FILTER_VARIANTS_COMBIMETS {
+process ASSIGN_CLONES {
 
-    publishDir "${params.outputs_dir}/${params.run_id}/filtered_variants", mode: 'copy'
+    publishDir "${params.outputs_dir}/${params.run_id}/variant_processing", mode: 'copy'
 
     input:
     path merged_variants
@@ -175,40 +202,36 @@ process FILTER_VARIANTS_COMBIMETS {
     path samplesheet
 
     output:
-    path "filtered.tsv"
+    path "mutations.assigned.tsv"
 
     script:
     """
-    python ${params.scripts.filter_variants_combimets} \
+    python ${params.scripts.assign_clones} \
         --mutations ${merged_variants} \
         --trees-dir ${trees_dir} \
         --ccfs-dir ${ccfs_dir} \
         --mettraj-clones ${mettraj_clones} \
         --samplesheet ${samplesheet} \
-        --zscore-thresh ${params.filter_variants.hypermutator_zscore} \
-        --outfile-mutations filtered.tsv \
-        --outfile-summary hypermutators.tsv
+        --outfile-mutations mutations.assigned.tsv
     """
 
 }
 
-process FILTER_VARIANTS_GENERIC {
+process ASSIGN_CLONES_PLACEHOLDER {
 
-    publishDir "${params.outputs_dir}/${params.run_id}/filtered_variants", mode: 'copy'
+    publishDir "${params.outputs_dir}/${params.run_id}/variant_processing", mode: 'copy'
 
     input:
     path merged_variants
 
     output:
-    path "filtered.tsv"
+    path "mutations.assigned.tsv"
 
     script:
     """
-    python ${params.scripts.filter_variants_generic} \
+    python ${params.scripts.assign_clones_placeholder} \
         --mutations ${merged_variants} \
-        --zscore-thresh ${params.filter_variants.hypermutator_zscore} \
-        --outfile-mutations filtered.tsv \
-        --outfile-summary hypermutators.tsv
+        --outfile-mutations mutations.assigned.tsv
     """
 
 }

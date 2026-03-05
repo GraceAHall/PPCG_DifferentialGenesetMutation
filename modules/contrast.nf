@@ -1,35 +1,64 @@
 
-process HARMONISE_DATA {
+// process HARMONISE_DATA {
 
-    publishDir "${params.outputs_dir}/${params.run_id}/harmonisation", mode: 'symlink'
+//     publishDir "${params.outputs_dir}/${params.run_id}/contrasts/harmonisation", mode: 'symlink'
 
-    input:
-    path mutations
-    path genesets
-    path sizes 
+//     input:
+//     path mutations
+//     path genesets
+//     path sizes 
 
-    output:
-    tuple path(mutations), path('genesets.tsv'), path('sizes.tsv')
+//     output:
+//     tuple path(mutations), path('genesets.tsv'), path('sizes.tsv')
 
-    script:
-    """
-    python ${params.scripts.harmonise_data} \
-        --mutations ${mutations} \
-        --genesets ${genesets} \
-        --sizes ${sizes} \
-        --gff ${params.refseq_gff_path} \
-        --gtf ${params.ensembl_gtf_path} \
-        --hgnc ${params.hgnc_path} \
-        --outfile-sizes sizes.tsv \
-        --outfile-gsets genesets.tsv
+//     script:
+//     """
+//     python ${params.scripts.harmonise_data} \
+//         --mutations ${mutations} \
+//         --genesets ${genesets} \
+//         --sizes ${sizes} \
+//         --gff ${params.refseq_gff_path} \
+//         --gtf ${params.ensembl_gtf_path} \
+//         --hgnc ${params.hgnc_path} \
+//         --outfile-sizes sizes.tsv \
+//         --outfile-gsets genesets.tsv
 
-    """
+//     """
 
-}
+// }
+
+// process PREPARE_DOWNSTREAM {
+
+//     publishDir "${params.outputs_dir}/${params.run_id}/contrasts/prepare_downstream", mode: 'symlink'
+
+//     input:
+//     path mutations
+//     path genesets
+//     path gff
+//     path hgnc
+
+//     output:
+//     tuple path('mutations.tsv'), path('genesets.tsv'), path('sizes.tsv')
+
+//     script:
+//     """
+//     python ${params.scripts.prepare_downstream} \
+//         --mutations ${mutations} \
+//         --genesets ${genesets} \
+//         --gff ${gff} \
+//         --hgnc ${hgnc} \
+//         --zscore-thresh ${params.filter_variants.hypermutator_zscore} \
+//         --outfile-muts mutations.tsv \
+//         --outfile-gsets genesets.tsv \
+//         --outfile-sizes sizes.tsv
+
+//     """
+
+// }
 
 process SPLIT_MUTATIONS {
     
-    publishDir "${params.outputs_dir}/${params.run_id}/${posclass}/split_mutations", mode: 'symlink'
+    publishDir "${params.outputs_dir}/${params.run_id}/contrasts/${posclass}/split_mutations", mode: 'symlink'
     
     input:
     tuple val(posclass), path(mutations), path(genesets), path(sizes), path(samplesheet)
@@ -52,7 +81,7 @@ process SPLIT_MUTATIONS {
 
 process SELECT_GENESETS {
     
-    publishDir "${params.outputs_dir}/${params.run_id}/${posclass}/select_genesets", mode: 'symlink'
+    publishDir "${params.outputs_dir}/${params.run_id}/contrasts/${posclass}/select_genesets", mode: 'symlink'
     
     input:
     tuple val(posclass), path(posmuts), path(negmuts), path(genesets), path(sizes)
@@ -62,6 +91,7 @@ process SELECT_GENESETS {
 
     script:
     """
+    echo "hi"
     python ${params.scripts.select_genesets} \
         --posmuts ${posmuts} \
         --negmuts ${negmuts} \
@@ -76,9 +106,31 @@ process SELECT_GENESETS {
 
 }
 
+
+process SINGLE_GENE_ANALYSIS {
+    
+    publishDir "${params.outputs_dir}/${params.run_id}/contrasts/${posclass}/single_gene_analysis", mode: 'symlink'
+    
+    input:
+    tuple val(posclass), path(posmuts), path(negmuts), path(genesets), path(sizes)
+
+    output:
+    tuple path('summary.log'), path('summary.tsv')
+
+    script:
+    """
+    echo "hi"
+    python ${params.scripts.single_gene_analysis} \
+        --posmuts ${posmuts} \
+        --negmuts ${negmuts} \
+        --outfile summary
+    """
+
+}
+
 process DIFFERENTIAL_MUTATION {
     
-    publishDir "${params.outputs_dir}/${params.run_id}/${posclass}/differential_mutation", mode: 'symlink'
+    publishDir "${params.outputs_dir}/${params.run_id}/contrasts/${posclass}/differential_mutation", mode: 'symlink'
     
     input:
     tuple val(posclass), path(posmuts), path(negmuts), path(genesets), path(sizes), path(selection)
@@ -100,7 +152,7 @@ process DIFFERENTIAL_MUTATION {
 
 process BACKGROUND_ENRICHMENT {
     
-    publishDir "${params.outputs_dir}/${params.run_id}/${posclass}/background_enrichment", mode: 'symlink'
+    publishDir "${params.outputs_dir}/${params.run_id}/contrasts/${posclass}/background_enrichment", mode: 'symlink'
     
     input:
     tuple val(posclass), path(posmuts), path(negmuts), path(genesets), path(sizes), path(selection)
@@ -129,20 +181,19 @@ process BACKGROUND_ENRICHMENT {
 
 process SUMMARISE_RESULTS {
     
-    publishDir "${params.outputs_dir}/${params.run_id}/${posclass}/results", mode: 'copy'
+    publishDir "${params.outputs_dir}/${params.run_id}/contrasts/${posclass}/results", mode: 'copy'
     
     input:
     tuple val(posclass), path(posmuts), path(negmuts), path(genesets), path(sizes), path(selection), path(diffmut), path(posenrich), path(negenrich)
 
     output:
     path "${posclass}.full.tsv"
-    path "${posclass}.sig.tsv"
+    // path "${posclass}.sig.tsv"
     path "oncoprints/"
 
     script:
     """
-    echo "yes"
-    
+    echo "hh"
     mkdir oncoprints
     python ${params.scripts.summarise_results} \
         --posclass ${posclass} \

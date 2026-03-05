@@ -27,7 +27,6 @@ def merge_pairs(df: pd.DataFrame) -> pd.DataFrame:
             data.append((rec.ID, coords, rec.GENES, rec.SVCLASS, rec.OUTCOME, vaf, np.nan))
     
     FIELDS = ['id', 'coords', 'gene', 'vtype', 'annotation', 'VAF', 'est_ccf']
-
     vframe = pd.DataFrame.from_records(data=data, columns=FIELDS)
     return vframe
 

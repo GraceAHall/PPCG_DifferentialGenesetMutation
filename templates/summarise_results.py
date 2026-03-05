@@ -35,60 +35,78 @@ def main() -> None:
     print(f"neg donors: {n_donors_neg}")
 
     df = pd.DataFrame(index=sel_genesets)
+    df['n_genes'] = gframe[gframe['geneset'].isin(sel_genesets)].groupby('geneset')['gene'].nunique()
     df['obs_treat'] = diff['posclass donors']
     df['obs_control'] = diff['negclass donors']
     df['bkg_treat'] = prich['background']
     df['bkg_control'] = nrich['background']
-    df['diffmut_pval'] = diff['logit_pval']
+    df['fisher_pval'] = diff['fisher_pval']
+    df['logit_pval'] = diff['logit_pval']
+    # df['diffmut_pval'] = diff['logit_pval']
     df['bkg_pval_treat'] = prich['pval']
     df['bkg_pval_control'] = nrich['pval']
     df['diffmut_factor'] = df['obs_treat'] / df['obs_control']
     df['bkg_factor_treat'] = prich['factor']
     df['bkg_factor_control'] = nrich['factor']
     
-    # sorting
-    mask = df['obs_control']!=0
-    df.loc[mask, 'sort_factor'] = df.loc[mask, 'diffmut_factor'].apply(lambda x: round(x))
-    df.loc[~mask, 'sort_factor'] = df['obs_treat']
-    df['sort_logit'] = df['diffmut_pval'].apply(lambda x: round(x, 2))
-    df = df.sort_values(['sort_logit', 'sort_factor'], ascending=[True, False])
-    df = df.drop(['sort_logit', 'sort_factor'], axis=1)
+    # # sorting
+    # mask = df['obs_control']!=0
+    # df.loc[mask, 'sort_factor'] = df.loc[mask, 'diffmut_factor'].apply(lambda x: round(x))
+    # df.loc[~mask, 'sort_factor'] = df['obs_treat']
+    # df['sort_logit'] = df['diffmut_pval'].apply(lambda x: round(x, 2))
+    # df = df.sort_values(['sort_logit', 'sort_factor'], ascending=[True, False])
+    # df = df.drop(['sort_logit', 'sort_factor'], axis=1)
 
     # filter
-    def is_valid(row: pd.Series) -> bool:
+    def is_significant(row: pd.Series) -> bool:
         # # has to be significantly enriched in positive cohort. 
-        # if row['diffmut_pval'] > 0.05:
+        if row['fisher_pval_FDR'] > 0.1:
+            return False 
+        return True
+        # if row['bkg_pval_treat'] > 0.1:
         #     return False 
-        # has to be enriched above background in positive cohort. 
-        if row['bkg_factor_treat'] < 1:
-            return False 
-        if row['bkg_pval_treat'] > 0.05:
-            return False
-        # can't be observed in negative cohort significantly below expected background rate
-        if row['bkg_factor_control'] < 1 and row['bkg_factor_control'] <= 0.05:
-            return False 
-        return True 
+        # if row['bkg_pval_control'] <= 0.1:
+        #     return False 
+
+        # # has to be enriched above background in positive cohort. 
+        # if row['bkg_factor_treat'] < 1:
+        #     return False 
+        # if row['bkg_pval_treat'] > 0.05:
+        #     return False
+        # # can't be observed in negative cohort significantly below expected background rate
+        # if row['bkg_factor_control'] < 1 and row['bkg_factor_control'] <= 0.05:
+        #     return False 
+        # return True 
 
     # filtering
-    df_full = df.copy()
-    df_sig = df.copy()
-    df_sig['valid'] = df_sig.apply(is_valid, axis=1)
-    df_sig = df_sig[df_sig['valid']==True].copy()
-    df_sig = df_sig.drop('valid', axis=1)
-    df_sig['diffmut_pval_fdr'] = stats.false_discovery_control(df_sig['diffmut_pval'].values)
-    df_sig = df_sig[df_sig['diffmut_pval_fdr']<=0.1].copy()
-    df_sig = df_sig.drop('diffmut_pval', axis=1)
+    df['fisher_pval_FDR'] = stats.false_discovery_control(df['fisher_pval'].to_list())
+    df['sig'] = df.apply(is_significant, axis=1)
+    outfile = f"{args.posclass}.full.tsv"
+    df = df.reset_index()
+    df = df.sort_values('fisher_pval')
+    df = df[[x for x in df.columns if x!='index']+['index']]
+    df.to_csv(outfile, sep='\t', index=False, float_format='%.3f')
+    return
 
-    # write to file
-    rframe = df_sig.copy()
-    outfile_full = f"{args.posclass}.full.tsv"
-    outfile_sig = f"{args.posclass}.sig.tsv"
-    df_full = df_full.reset_index()
-    df_sig = df_sig.reset_index()
-    df_full = df_full[[x for x in df_full.columns if x!='index']+['index']]
-    df_sig = df_sig[[x for x in df_sig.columns if x!='index']+['index']]
-    df_full.to_csv(outfile_full, sep='\t', index=False, float_format='%.3f')
-    df_sig.to_csv(outfile_sig, sep='\t', index=False, float_format='%.3f')
+    # df_full = df.copy()
+    # df_sig = df.copy()
+    # df_sig['valid'] = df_sig.apply(is_valid, axis=1)
+    # df_sig = df_sig[df_sig['valid']==True].copy()
+    # df_sig = df_sig.drop('valid', axis=1)
+    # df_sig['diffmut_pval_fdr'] = stats.false_discovery_control(df_sig['diffmut_pval'].values)
+    # df_sig = df_sig[df_sig['diffmut_pval_fdr']<=0.1].copy()
+    # df_sig = df_sig.drop('diffmut_pval', axis=1)
+
+    # # write to file
+    # rframe = df_sig.copy()
+    # outfile_full = f"{args.posclass}.full.tsv"
+    # outfile_sig = f"{args.posclass}.sig.tsv"
+    # df_full = df_full.reset_index()
+    # df_sig = df_sig.reset_index()
+    # df_full = df_full[[x for x in df_full.columns if x!='index']+['index']]
+    # df_sig = df_sig[[x for x in df_sig.columns if x!='index']+['index']]
+    # df_full.to_csv(outfile_full, sep='\t', index=False, float_format='%.3f')
+    # df_sig.to_csv(outfile_sig, sep='\t', index=False, float_format='%.3f')
     
     # merge mutations
     POSCLASS = f"{args.posclass} ({n_donors_pos} donors)"

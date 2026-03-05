@@ -1,0 +1,133 @@
+INFILE_GSETS = '/home/grace/work/PPCG_DifferentialGenesetMutation/data/genesets/c2.cp.reactome.v2026.1.Hs.symbols.tsv'
+INFILE_HGNC = '/home/grace/work/PPCG_DifferentialGenesetMutation/data/supporting/hgnc/hgnc_complete_set.txt'
+INFILE_MUTS = '/home/grace/work/PPCG_DifferentialGenesetMutation/outputs/combi_ppcg_reactome/variant_processing/merged.tsv'
+INFILE_SIZES = '/home/grace/work/PPCG_DifferentialGenesetMutation/data/supporting/refseq/gene_sizes.tsv'
+INFILE_GENCODE_v31lift37 = '/home/grace/work/PPCG_DifferentialGenesetMutation/data/test/gencode.v31lift37.basic.annotation.gff3'
+
+#####################################################################
+### Read HGNC to extract symbol mappings for protein-coding genes ### 
+#####################################################################
+
+fucked = 0
+hgnc_alt2curr_id = dict()
+hgnc_curr2curr_id = dict()
+
+with open(INFILE_HGNC, 'r') as fp:
+    line = fp.readline().strip('\n')
+    line = fp.readline().strip('\n')
+    i = 0
+    while line:
+        lsplit = line.split('\t')
+        locus_group = lsplit[3]
+        if locus_group == 'protein-coding gene':
+            curr_id = lsplit[0].replace('HGNC:', '')
+            curr_sym = lsplit[1]
+            alias_syms = lsplit[8].strip('"').split('|')
+            prev_syms = lsplit[10].strip('"').split('|')
+            hgnc_curr2curr_id[curr_sym] = curr_id
+            for alt_sym in alias_syms + prev_syms:
+                i += 1
+                if alt_sym == '':
+                    continue 
+                if alt_sym in hgnc_alt2curr_id and hgnc_alt2curr_id[alt_sym]!=curr_id:
+                    fucked += 1
+                hgnc_alt2curr_id[alt_sym] = curr_id
+        line = fp.readline().strip('\n')
+
+######################################
+### Read GFF3 for size information ### 
+######################################
+
+def get_name(text: str) -> str:
+    PATTERN = r'^.*?gene_name=([A-Za-z0-9_\.-]+).*?$'
+    m = re.match(PATTERN, text)
+    assert m is not None
+    return m.group(1)
+
+def get_gtype(text: str) -> str:
+    PATTERN = r'^.*?gene_type=([A-Za-z0-9_-]+).*?$'
+    m = re.match(PATTERN, text)
+    assert m is not None
+    return m.group(1)
+
+def get_gene_id(text: str) -> None|str:
+    PATTERN = r'^.*?gene_id=([A-Z0-9\._]+).*?$'
+    m = re.match(PATTERN, text)
+    if m is None:
+        return None
+    return m.group(1)
+
+def get_hgnc_id(text: str) -> None|str:
+    PATTERN = r'^.*?hgnc_id=HGNC:([0-9]+).*?$'
+    m = re.match(PATTERN, text)
+    if m is None:
+        return None
+    return m.group(1)
+
+def get_tx_name(text: str) -> None|str:
+    PATTERN = r'^.*?transcript_name=([A-Za-z0-9_-]+).*?$'
+    m = re.match(PATTERN, text)
+    if m is None:
+        return None
+    return m.group(1)
+
+def get_level(text: str) -> int:
+    PATTERN = r'^.*?level=([0-9]+).*?$'
+    m = re.match(PATTERN, text)
+    assert m is not None
+    return int(m.group(1))
+
+data = []
+with open(INFILE_GENCODE_v31lift37, 'r') as fp:
+    line = fp.readline().strip('\n')
+    i = 0
+    while line:
+        if line.startswith('#'):
+            line = fp.readline().strip('\n')
+            continue 
+        i += 1
+        if i % 10_000 == 0:
+            print(f"processed {i} records...", end='\r')
+        lsplit = line.split('\t')
+        src = lsplit[1]
+        name = get_name(lsplit[8])
+        gtype = get_gtype(lsplit[8])
+        gene_id = get_gene_id(lsplit[8])
+        hgnc_id = get_hgnc_id(lsplit[8])
+        tx_name = get_tx_name(lsplit[8])
+        ftype = lsplit[2]
+        chrom = lsplit[0]
+        start = int(lsplit[3])
+        stop = int(lsplit[4])
+        level = get_level(lsplit[8])
+        if hgnc_id is not None:
+            data.append((src, name, gene_id, hgnc_id, gtype, tx_name, ftype, level, chrom, start, stop))
+        line = fp.readline().strip('\n')
+print(f"processed {i} records... done")
+
+df = pd.DataFrame.from_records(data, columns=['source', 'gene', 'gene_id', 'hgnc_id', 'type', 'transcript', 'feature', 'level', 'chrom', 'start', 'stop'])
+df['span'] = df['stop'] - df['start']
+df.head()
+
+
+#########################################
+### mutation & geneset gene filtering ###
+#########################################
+
+def fetch_hgnc_id(text: str, alt2id: dict, curr2id: dict) -> str|None:
+    if text in curr2id:
+        return curr2id[text]
+    elif text in alt2id:
+        return alt2id[text]
+    return None
+
+# mutations
+muts = pd.read_csv(INFILE_MUTS, sep='\t', header=0)
+muts = muts[muts['annotation']!='CNApeak'].copy()
+muts['hgnc_id'] = muts['gene'].apply(fetch_hgnc_id, alt2id=hgnc_alt2curr_id, curr2id=hgnc_curr2curr_id)
+muts = muts[muts['hgnc_id'].notna()].copy()
+
+# genesets
+gframe = pd.read_csv(INFILE_GSETS, sep='\t', header=0)
+gframe['hgnc_id'] = gframe['Gene'].apply(fetch_hgnc_id, alt2id=hgnc_alt2curr_id, curr2id=hgnc_curr2curr_id)
+gframe = gframe[gframe['hgnc_id'].notna()].copy()

@@ -20,10 +20,10 @@ def load_scna(filepath: str, allow_subclonal: bool) -> pd.DataFrame:
     data = []
     for idx, rec in df.iterrows():
         segments = []
-        if not rec.isna()['nMaj2_A']:
-            majority = max(rec.frac1_A, rec.frac2_A)
-        else:
-            majority = rec.frac1_A
+        # if not rec.isna()['nMaj2_A']:
+        #     majority = max(rec.frac1_A, rec.frac2_A)
+        # else:
+        #     majority = rec.frac1_A
         segments.append((
             rec.chr, 
             rec.start, 
@@ -31,7 +31,8 @@ def load_scna(filepath: str, allow_subclonal: bool) -> pd.DataFrame:
             rec.nMaj1_A, 
             rec.nMin1_A, 
             rec.nMaj1_A+rec.nMin1_A,
-            rec.frac1_A / majority
+            rec.frac1_A
+            # rec.frac1_A / majority
         ))
         if not rec.isna()['nMaj2_A']:
             segments.append((
@@ -41,7 +42,8 @@ def load_scna(filepath: str, allow_subclonal: bool) -> pd.DataFrame:
                 rec.nMaj2_A, 
                 rec.nMin2_A, 
                 rec.nMaj2_A+rec.nMin2_A,
-                rec.frac2_A / majority
+                rec.frac2_A
+                # rec.frac2_A / majority
             ))
         if len(segments)==2 and not allow_subclonal:
             continue 
@@ -49,30 +51,17 @@ def load_scna(filepath: str, allow_subclonal: bool) -> pd.DataFrame:
             data += segments
 
     cnframe = pd.DataFrame.from_records(data, columns=['chr', 'start', 'end', 'nMaj', 'nMin', 'tcn', 'frac_ccf'])
+    cnframe['chr'] = cnframe['chr'].astype('str')
+    cnframe['start'] = cnframe['start'].astype('int')
+    cnframe['end'] = cnframe['end'].astype('int')
     return cnframe
+
+
 
 #################
 ### FILTERING ###
 #################
 
-def filter_hypermutators(df: pd.DataFrame, zscore_thresh: float) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    counts = df.drop_duplicates(subset=['donor', 'vclass', 'gene'])['donor'].value_counts()
-  
-    # Modified Z-Score (MAD)
-    median = counts.median()
-    mad = np.median(np.abs(counts - median))
-    
-    # Modified Z-score
-    modified_z_scores = 0.6745 * (counts - median) / mad
-    
-    # Summary
-    results = counts.to_frame()
-    results['modified_z_scores'] = modified_z_scores
-    results['outlier'] = results['modified_z_scores']>zscore_thresh
-    hypermutators = set(results[results['outlier']==True].index.to_list())
-    df_filt = df[~df['donor'].isin(hypermutators)].copy()
-
-    return df_filt, results
 
 
 

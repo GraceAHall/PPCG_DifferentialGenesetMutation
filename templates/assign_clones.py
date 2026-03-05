@@ -4,8 +4,6 @@ import pandas as pd
 import networkx as nx 
 from typing import Tuple
 
-from utils import filter_hypermutators
-
 pd.set_option('display.max_rows', 500)
 pd.set_option('display.max_columns', 500)
 pd.set_option('display.width', 1000)
@@ -66,13 +64,8 @@ def main() -> None:
     df = df.drop('label', axis=1)
     df = df.sort_values(['donor', 'coords', 'gene'])
 
-    # hypermutators
-    df_filt, results = filter_hypermutators(df, args.zscore_thresh)
-    results = results.reset_index()
-
     # write to file.
-    df_filt.to_csv(args.outfile_mutations, sep='\t', index=False)
-    results.to_csv(args.outfile_summary, sep='\t', index=False)
+    df.to_csv(args.outfile_mutations, sep='\t', index=False)
 
 
 def filter_duplicates(table: pd.DataFrame) -> pd.DataFrame:
@@ -381,9 +374,7 @@ def load_cmdline_args() -> argparse.Namespace:
     parser.add_argument('--trees-dir', type=str, required=True, help='Path to directory containing machina tree data.')
     parser.add_argument('--ccfs-dir', type=str, required=True, help='Path to directory containing dpclust clone ccfs.')
     parser.add_argument('--mettraj-clones', type=str, required=True, help='Path to file mapping donors to clones in metastatic trajectory.')
-    parser.add_argument('--zscore-thresh', type=float, required=True, help='outlier threshold via Modified Z-Score (MAD) (standard deviations from the mean).')
     parser.add_argument('--outfile-mutations', type=str, required=True, help='Path to output .tsv file containing filtered variants.')
-    parser.add_argument('--outfile-summary', type=str, required=True, help='Path to output .tsv file containing hypermutator summary.')
     args = parser.parse_args()
     return args
 
