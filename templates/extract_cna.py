@@ -11,7 +11,7 @@ pd.set_option('display.width', 1000)
 pd.set_option('display.max_colwidth', 40)
 pd.options.display.float_format = '{:.2f}'.format
 
-from utils import load_scna
+from extract_utils import load_scna
 
 def main() -> None:
     args = load_cmdline_args()
@@ -262,6 +262,9 @@ def extract_gencode(segs: pd.DataFrame, gff: pd.DataFrame, args: argparse.Namesp
                 if cnas.shape[0] == 0:
                     continue 
                 
+                if chrom == 'X':
+                    print()
+                    print(cnas)
                 cnas['start'] = cnas['start'].clip(lower=gene.start)
                 cnas['end'] = cnas['end'].clip(upper=gene.end)
                 cnas['span'] = cnas['end'] - cnas['start']

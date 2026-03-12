@@ -1,5 +1,6 @@
 
 import re
+import sys
 import numpy as np
 import pandas as pd 
 import networkx as nx 
@@ -20,21 +21,22 @@ def load_scna(filepath: str, allow_subclonal: bool) -> pd.DataFrame:
     data = []
     for idx, rec in df.iterrows():
         segments = []
-        # if not rec.isna()['nMaj2_A']:
-        #     majority = max(rec.frac1_A, rec.frac2_A)
-        # else:
-        #     majority = rec.frac1_A
-        segments.append((
-            rec.chr, 
-            rec.start, 
-            rec.end, 
-            rec.nMaj1_A, 
-            rec.nMin1_A, 
-            rec.nMaj1_A+rec.nMin1_A,
-            rec.frac1_A
-            # rec.frac1_A / majority
-        ))
         if not rec.isna()['nMaj2_A']:
+            majority = max(rec.frac1_A, rec.frac2_A)
+        else:
+            majority = rec.frac1_A
+
+        if rec.frac1_A > 0:
+            segments.append((
+                rec.chr, 
+                rec.start, 
+                rec.end, 
+                rec.nMaj1_A, 
+                rec.nMin1_A, 
+                rec.nMaj1_A+rec.nMin1_A,
+                rec.frac1_A / majority
+            ))
+        if not rec.isna()['frac2_A'] and rec.frac2_A > 0:
             segments.append((
                 rec.chr, 
                 rec.start, 
@@ -42,9 +44,9 @@ def load_scna(filepath: str, allow_subclonal: bool) -> pd.DataFrame:
                 rec.nMaj2_A, 
                 rec.nMin2_A, 
                 rec.nMaj2_A+rec.nMin2_A,
-                rec.frac2_A
-                # rec.frac2_A / majority
+                rec.frac2_A / majority
             ))
+
         if len(segments)==2 and not allow_subclonal:
             continue 
         else:
@@ -55,6 +57,41 @@ def load_scna(filepath: str, allow_subclonal: bool) -> pd.DataFrame:
     cnframe['start'] = cnframe['start'].astype('int')
     cnframe['end'] = cnframe['end'].astype('int')
     return cnframe
+
+
+######################
+### CCF ESTIMATION ###
+######################
+
+class CCFestimator:
+    def __init__(self, purity: float, scna_path: str) -> None:
+        self.purity = purity
+        self.cnframe = load_scna(scna_path, allow_subclonal=True)
+
+    def est_ccf(self, chrom: str, position: int, vaf: float) -> float:
+        f = vaf 
+        p = self.purity
+
+        # get copy number information
+        cnslice = self.cnframe[self.cnframe['chr']==chrom].copy()
+        cnslice = cnslice[(cnslice['start']>=position) & (cnslice['end']<=position)].copy()
+        if cnslice.shape[0] == 0:
+            # assume normal copy number. 
+            # tcn == 2 for autosomes, 1 for sex chromosomes
+            segs = [[2.0, 1.0]] if chrom.isdigit() else [[1.0, 1.0]]
+        else:
+            segs = [[float(rec.tcn), rec.frac_ccf] for rec in cnslice.itertuples()] # type: ignore
+
+        data = []
+        for nt, frac_ccf in segs:
+            m = max(1, round(( f/p ) * ( p*nt + 2*(1-p) )))
+            ccf = ( f/(m*p) ) * ( p*nt + 2*(1-p) )
+            diff = abs(frac_ccf-ccf)
+            data.append((round(ccf, 2), diff))
+        data.sort(key=lambda x: x[-1])
+        return min(1, data[0][-2])
+    
+
 
 
 
@@ -306,39 +343,6 @@ def load_scna(filepath: str, allow_subclonal: bool) -> pd.DataFrame:
 #         T.remove_node(leaf)
 #     return T
 
-
-######################
-### CCF ESTIMATION ###
-######################
-
-class CCFestimator:
-    def __init__(self, purity: float, scna_path: str) -> None:
-        self.purity = purity
-        self.cnframe = load_scna(scna_path, allow_subclonal=True)
-
-    def est_ccf(self, chrom: str, position: int, vaf: float) -> float:
-        f = vaf 
-        p = self.purity
-
-        # get copy number information
-        cnslice = self.cnframe[self.cnframe['chr']==chrom].copy()
-        cnslice = cnslice[(cnslice['start']>=position) & (cnslice['end']<=position)].copy()
-        if cnslice.shape[0] == 0:
-            # assume normal copy number. 
-            # tcn == 2 for autosomes, 1 for sex chromosomes
-            segs = [[2.0, 1.0]] if chrom.isdigit() else [[1.0, 1.0]]
-        else:
-            segs = [[float(rec.tcn), rec.frac_ccf] for rec in cnslice.itertuples()] # type: ignore
-
-        data = []
-        for nt, frac_ccf in segs:
-            m = max(1, round(( f/p ) * ( p*nt + 2*(1-p) )))
-            ccf = ( f/(m*p) ) * ( p*nt + 2*(1-p) )
-            diff = abs(frac_ccf-ccf)
-            data.append((round(ccf, 2), diff))
-        data.sort(key=lambda x: x[-1])
-        return min(1, data[0][-2])
-    
 
 # ########################
 # ### CLONE ASSIGNMENT ###

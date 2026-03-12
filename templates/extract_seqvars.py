@@ -3,7 +3,7 @@ import re
 import pandas as pd 
 import argparse
 from copy import deepcopy
-from utils import CCFestimator
+from extract_utils import CCFestimator
 
 pd.set_option('display.max_rows', 500)
 pd.set_option('display.max_columns', 500)

@@ -26,7 +26,6 @@ include { SUMMARISE_RESULTS } from './modules/contrast'
 genesets        = file(params.genesets)
 hgnc            = file(params.hgnc_path)
 gff             = file(params.gencode_gff_path)
-refgff          = file(params.refseq_gff_path)
 
 Channel.fromPath(params.samplesheet)
     | splitCsv(header: true, sep: '\t')
@@ -45,8 +44,6 @@ Channel.fromPath(params.samplesheet)
     | set { samples_ch }
 
 
-
-
 workflow {
 
     LOG_SETTINGS()
@@ -54,7 +51,6 @@ workflow {
     // --- INITAL FILE WRANGLING --- //
     ch_samplesheet  = Channel.fromPath(params.samplesheet) 
     sv_files        = Channel.fromPath("${params.basedir}/data/sv_annot/*.vcf")
-    // sv_files        = Channel.fromPath("${params.basedir}/data/sv_raw/*.vcf")
     snv_files       = Channel.fromPath("${params.basedir}/data/snv/*.vcf")
     indel_files     = Channel.fromPath("${params.basedir}/data/indel/*.vcf")
     scna_files      = Channel.fromPath("${params.basedir}/data/scna/*.txt")
@@ -89,17 +85,19 @@ workflow {
         ch_snvs.collect(),
         ch_indels.collect()
     )
-    ch_merged = MERGE_VARIANTS.out.merged
+    ch_merged = MERGE_VARIANTS.out.mutations
     
     // filter variants & harmonise gene symbols between various data sources
-    ch_data = STANDARDISE_AND_FILTER_VARIANTS(ch_merged, genesets, gff, hgnc) 
-
+    STANDARDISE_AND_FILTER_VARIANTS(ch_merged, genesets, gff, hgnc) 
+    ch_filtered = STANDARDISE_AND_FILTER_VARIANTS.out.mutations
+    
     // // assign mutations to clones. 
     // // any donor with 2+ samples is expected to have a phylogenetic tree. 
     // ch_trees_dir = Channel.fromPath("${params.basedir}/data/phylogeny_angel/trees", type: 'dir')
     // ch_ccfs_dir = Channel.fromPath("${params.basedir}/data/phylogeny_angel/dpclust", type: 'dir')
     // mettraj_clones = file("${params.basedir}/data/phylogeny_angel/met_trajectory_clones.tsv")
-    // ch_mutations = ASSIGN_CLONES(MERGE_VARIANTS.out.merged, ch_trees_dir, ch_ccfs_dir, mettraj_clones, ch_samplesheet)
+    // ch_assigned = ASSIGN_CLONES(ch_filtered, ch_trees_dir, ch_ccfs_dir, mettraj_clones, ch_samplesheet) 
+
 
 
     // // --- COHORT CONTRASTS --- //

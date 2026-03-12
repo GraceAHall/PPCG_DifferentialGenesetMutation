@@ -141,7 +141,7 @@ process MERGE_VARIANTS {
     path indelfiles, stageAs: 'indels/*'
 
     output:
-    path "mutations.merged.tsv", emit: merged
+    path "mutations.merged.tsv", emit: mutations
     path "mutations.merged.log", emit: log
 
     script:
@@ -168,7 +168,9 @@ process STANDARDISE_AND_FILTER_VARIANTS {
     path hgnc
 
     output:
-    tuple path('mutations.filtered.tsv'), path('genesets.tsv'), path('sizes.tsv')
+    path 'mutations.filtered.tsv', emit: 'mutations'
+    path 'genesets.tsv', emit: 'genesets'
+    path 'sizes.tsv', emit: 'sizes'
 
     script:
     """

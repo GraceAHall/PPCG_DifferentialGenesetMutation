@@ -38,6 +38,12 @@ def main() -> None:
     # filter non-protein-coding genes
     sframe, gframe, muts = filter_non_protein_coding_genes(sframe, gframe, muts)
 
+    print('\ndropping duplicates...')    
+    print(muts.shape)
+    muts = muts.drop_duplicates(subset=['sample', 'coords', 'gene', 'vclass'])
+    print(muts.shape)
+    print()
+
     # ensure missing mutated / geneset genes have a size. 
     sframe = augment_sizes_table(sframe, gframe, muts)
 

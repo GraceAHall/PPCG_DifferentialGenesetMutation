@@ -8,18 +8,18 @@
 TODO 
 - redo CNA extraction as annotation==CNAgene is most common hgnc_id issue. 
 - swap SNPEFF to use gencode GRCh37.v31
+- swap in the new Battenberg fits for CombiMets samples
 
+CNA ccfs are WEIRD when assigning lineages....
 
+Ok I've rerun the variant extraction. 
+Included all donors for which I have basic information (purity, ploidy, WGD status) and at least 1 piece of actual variant data. 
+Some samples are marked 'tissue'='Unknown'.  These are non-combimets donors added after 2020 - unfortunately my tissue metadata is only current up to 2020. Probably just all primary prostate samples. 
+The 'Missing_Files' metadata field is pretty important.  For example, a donor with no SV mutations could be because they genuinely dont have SVs impacting protein-coding genes, or because I didn't have the VCF file. 
 
-Current HGNC ids are used as the background genelist. 
-Only protein-coding genes are considered. 
-Only mutated genes which can be linked to hgnc_id are kept.
-Only geneset genes which can be linked to hgnc_id are kept.
+All donors: Simple lineage annotation. 
+CONIPHER donors: Clone assignment. 
 
-hgnc: 19291 genes
-gff3: 19100 genes can be mapped to hgnc_id
+How specific do we wanna be with the CNAs SVs? Ie using coords to exactly say 'this variant' is in multiple samples or just gene disruption? 
 
-99% (19100/19291) of hgnc genes have size information. 
-
-
-
+Let me know if you have any questions! 
