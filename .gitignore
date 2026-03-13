@@ -13,7 +13,6 @@ data.tar.gz
 # misc
 notes.txt
 fast_vs_slow.txt
-scripts/
 test/
 temp/
 templates/*.ipynb
