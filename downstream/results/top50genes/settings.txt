@@ -1,0 +1,16 @@
+Arguments for this analysis ---
+
+- run_id: top100genes
+- outdir: ./results
+- muts: /home/grace/work/PPCG_DifferentialGenesetMutation/data/manual/mutations.assigned.160326.tsv
+- sheet: /home/grace/work/PPCG_DifferentialGenesetMutation/samplesheet.angel.alldonors.tsv
+- dpclust_dir: /home/grace/work/PPCG_DifferentialGenesetMutation/data/angel/dpclust_ccf
+- conipher_dir: /home/grace/work/PPCG_DifferentialGenesetMutation/data/angel/conipher_trees
+- ppcg_all: False
+- combi_all: False
+- hypermutator_ngenes: 500
+- filter_secondary_leaves: False
+- filter_primary_leaves: False
+- top_genes: 0
+- min_cohort_prop: 0.0
+- min_combi_prop: 0.0

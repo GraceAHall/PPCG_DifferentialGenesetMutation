@@ -1,0 +1,19 @@
+Arguments for this analysis ---
+
+- run_id: GOBP
+- outdir: ./results
+- muts: /home/grace/work/PPCG_DifferentialGenesetMutation/data/manual/mutations.assigned.160326.tsv
+- sizes: /home/grace/work/PPCG_DifferentialGenesetMutation/outputs/angel_mutations_all_donors/variant_processing/sizes.tsv
+- sheet: /home/grace/work/PPCG_DifferentialGenesetMutation/samplesheet.angel.alldonors.tsv
+- hgnc: /home/grace/work/PPCG_DifferentialGenesetMutation/data/supporting/hgnc/hgnc_complete_set.txt
+- gmt: /home/grace/work/PPCG_DifferentialGenesetMutation/data/genesets/c5.go.bp.v2026.1.Hs.symbols.gmt
+- dpclust_dir: /home/grace/work/PPCG_DifferentialGenesetMutation/data/angel/dpclust_ccf
+- conipher_dir: /home/grace/work/PPCG_DifferentialGenesetMutation/data/angel/conipher_trees
+- ppcg_all: False
+- combi_all: False
+- hypermutator_ngenes: 600
+- filter_secondary_leaves: False
+- filter_primary_leaves: True
+- top_genes: 0
+- min_cohort_prop: 0.0
+- min_combi_prop: 0.0

@@ -1,0 +1,51 @@
+
+--- Basic Info ---
+
+
+       Donors  Genes  Variants
+PPCG       64   5106      7381
+COMBI      64   5241      7640
+
+--- Variant Class ---
+
+[PPCG]
+       vars  genes  donors  med. vars p/donor
+INDEL   269    259      52                  4
+SNV    3674   3036      64                 50
+SV     3438   2561      61                 48
+
+[COMBI]
+       vars  genes  donors  med. vars p/donor
+INDEL   315    294      51                  5
+SNV    3803   3081      64                 50
+SV     3522   2613      61                 48
+
+--- Donors ---
+
+[PPCG]
+vclass    INDEL  SNV   SV  total
+donor                           
+PPCG0386     15  140  343    495
+PPCG0440     16  251   74    340
+PPCG0002     11   93  234    333
+PPCG0058     11  112  156    275
+PPCG0687     14  162   50    224
+PPCG0163      7  146   62    215
+PPCG0587     13  130   37    180
+PPCG0545      7   84   81    172
+PPCG0384      9   95   64    166
+PPCG0754      3   78   77    157
+
+[COMBI]
+vclass    INDEL  SNV   SV  total
+donor                           
+PPCG1076     22  205  350    567
+PPCG0996     11  238  148    394
+PPCG0086     19  104  243    356
+PPCG0181     17  112  137    262
+PPCG0467      9  155   60    224
+PPCG0998      7  171   45    220
+PPCG0087      5   84   84    170
+PPCG1030     12  123   33    167
+PPCG1018     12   93   61    161
+PPCG0988      5   81   76    160

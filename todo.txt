@@ -23,3 +23,11 @@ CONIPHER donors: Clone assignment.
 How specific do we wanna be with the CNAs SVs? Ie using coords to exactly say 'this variant' is in multiple samples or just gene disruption? 
 
 Let me know if you have any questions! 
+
+
+
+KEGG_MEDICUS_REFERENCE_EGF_EGFR_ACTIN_SIGNALING_PATHWAY
+KEGG_MEDICUS_ENV_FACTOR_METALS_TO_KEAP1_NRF2_SIGNALIG_PATHWAY
+KEGG_MEDICUS_REFERENCE_COHESIN_DISSOCIATION_IN_ANAPHASE
+KEGG_MEDICUS_PATHOGEN_HTLV_1_TAX_TO_SPINDLE_ASSEMBLY_CHECKPOINT_SIGNALING
+
