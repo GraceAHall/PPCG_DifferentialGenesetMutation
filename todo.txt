@@ -1,4 +1,42 @@
 
+
+
+TODO 
+1. Add LOH variants to extraction process 
+    - nMinA 0, nMajA 1+ 
+2. Latency analysis: Seeding trajectories
+    - Use seeding lineages (1+ per donor) rather than only Trunk mutations. 
+    - Linear mixed-effects model test (donor=experimental structure)
+3. Redo CNA assignments
+    - Send all CNA assignments to Angel (deep del, shallow del, )
+4. Metastasis genesets 
+    - 
+COSMIC genes
+
+CNA assignments 
+- identify misscalls (two parts to solution, both similar CN states) & mask one of the parts 
+- reporting:
+    - was the interval clipped due to segment bounds? (overlapping)
+    - was the assignment inexact and the cost 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 1. Meet with Geoff to create plan
 2. Create the final figures / sections 
 3. Ensure reviewer comments are addressed

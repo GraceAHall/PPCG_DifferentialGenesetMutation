@@ -1,0 +1,164 @@
+
+
+First slide: Stress vs Time plot 
+- In this talk I will explain why I feel more optimistic about AI. 
+- If and ONLY IF we do certain things. 
+
+-------------------------------------------
+--- Section 1: The AI Landscape in 2026 ---
+-------------------------------------------
+
+2025 vs 2026
+
+2025 
+- Context windows ~128k tokens 
+- Multimodal was clunky
+- "one-shot" reasoning (single answer)
+    - DeepSeek R1 Demonstrated that "reasoning" behaviour was the future 
+    - Models showing their working produced substantially better answers. 
+    - could be trained cheaply.
+
+2026 
+- Context windows ~1m tokens - entire documents, code repositories
+- "thinking" models (extended reasoning)
+- Multimodal is decent. 
+    - screenshot from recent Claude convo 
+    - slide deck creation 
+- "Agentic" capability is decent. 
+    - Work autonomously for hours. 
+    - Break the problem down into smaller tasks. 
+    - Complete each task then validate output. 
+- Price is drastically lower 
+    - Sonnet 4.6 (mid-tier, one fifth the price of Opus) reaches 79.6% on SWE-bench — only 1.2 points behind Opus 4.6
+    - Sonnet 4.6 is much better than the best, most expensive models from 2025 
+
+Terms  
+- Chain-of-thought (CoT)
+    - "let's think through this step-by-step"
+    - model breaks down problem into smaller pieces then works through each.  
+    - Humans do this. 
+- Reasoning / thinking model
+    - If "x then y"
+    - Relies on what it thinks is 'objectively correct' to reason about the problem. 
+    - Model has internal "scratchpad" of reasoning (burning many tokens)
+    - Multiple extended CoTs are created as it works through the task 
+    - Slower and more expensive per query but produce better output. 
+
+- Multimodal 
+    - A model that can handle more than just text — images, audio, video, structured data.
+    - Eg. Can accurately describe & interpret figures you provide and can create them itself.  
+
+Agents
+- An LLM that doesn't just respond to a single question but takes a sequence of actions to complete a longer task
+- It has access to tools (search, code execution, file access, APIs)
+- Decides which tool to use at current point, uses it, observes the results, then decides what to do next. 
+- Iterates until task is complete (or it gets stuck). 
+- "Acts" in the world rather than just in the conversation.
+
+The General LLM Landscape
+
+Which model is the best? - Each has specific niche.
+- Coding: Claude Sonnet/Opus 4.6
+- Summarisation: Gemini 
+- Chatbot: ChatGPT (most human)
+
+Best model for the job? - Tuned for the task.
+- Foundational model is appropriate. 
+- Pre-tuned or one you cultivate yourself. 
+- System prompt (at the top of each conversation)
+- Skills (eg slide deck generation)
+- Data (resources)
+
+
+
+University efforts 
+
+
+
+
+Slide 4 — Bioinformatics-Specific AI Tools
+
+Protein & structural biology
+
+AlphaFold 3 — protein + nucleic acid + ligand structure prediction
+ESMFold, ProteinMPNN — sequence embedding and protein design
+RoseTTAFold All-Atom — multi-molecule complex modelling
+
+
+Genomics & sequence models
+
+Nucleotide Transformers — genomic sequence LLMs
+Evo 2 (Arc Institute) — DNA foundation model trained on 9.3 trillion nucleotides
+DNABERT-2 — multi-species genomic language model
+
+
+Agentic bioinformatics
+
+BioClaw — conversational bioinformatics agent (built on Claude + STELLA framework)
+
+Runs BLAST searches, renders protein structures via PyMOL, performs FastQC, searches PubMed — all via natural language (WhatsApp/chat interface)
+Represents a new paradigm: no CLI required, results delivered conversationally
+
+
+OpenClaw Medical Skills — 869 curated agent skills covering genomics, drug discovery, clinical workflows, structural biology
+STELLA — self-evolving multimodal agent framework for biomedical research
+
+
+Literature & knowledge tools
+
+BioMedLM, PubMedBERT — domain-tuned language models for biomedical NLP
+Elicit, Consensus — AI-powered systematic literature review
+Semantic Scholar AI features — paper recommendations, citation context
+
+
+
+
+Slide 5 — AI in the Workflow: Beyond the Browser
+
+AI is no longer just a website you visit
+
+The shift: from "open Claude/ChatGPT in a browser tab" to AI embedded directly in your tools
+
+
+IDE integration — AI as a coding co-pilot
+
+GitHub Copilot, Cursor, Windsurf — autocomplete has evolved into full pair-programming
+Claude Code, Gemini CLI — terminal-native agents that write, run, and debug entire pipelines
+JetBrains AI Assistant, VS Code Copilot Chat — inline explanations, refactoring, docstring generation
+Practical impact: Snakemake/Nextflow/WDL pipelines scaffolded in hours, not days; debugging dramatically faster
+
+
+Agentic frameworks — agents that do, not just suggest
+
+agency-agents (GitHub, ★56k) — 144 specialised agent "personas" (AI Engineer, Data Engineer, etc.) deployable directly into Claude Code, Cursor, GitHub Copilot
+Multi-agent orchestration: agents calling other agents, parallel pipelines, automated review/test chains
+MCP (Model Context Protocol) — standardised tool-calling so agents connect to databases, APIs, lab notebooks, and cloud compute
+For bioinformatics: agent workflows for QC → alignment → variant calling → annotation; human reviews outputs rather than executing every step
+
+
+The shift in practice
+
+"Searching Stack Overflow" → "asking your IDE"
+Code fluency is changing: the barrier to entry for bioinformatics pipelines is dropping sharply
+Risk: students and researchers who don't engage with these tools will be less productive than those who do
+
+--------------------------------------------
+--- Section 2: Implications for Teaching ---
+--------------------------------------------
+
+How will COMP90014 change in 2026? 
+
+
+
+--------------------------------------------
+--- Section 3: Implications for Research ---
+--------------------------------------------
+
+In 2025, open-weight models were significantly behind closed-weight "frontier" models. 
+
+Open weight     Closed weight 
+
+In 2026, the gap is much smaller.  Strong open-weight models are now viable for local deployment on lab hardware, which matters for sensitive data.  Also something fun: open-weight models run locally can be completely jailbroken, removing ALL safety guardrails :) 
+
+
+

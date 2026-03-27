@@ -3,19 +3,18 @@ import argparse
 import pandas as pd 
 
 
-def generate_geneset_matrix(gset_LUT: dict[str, list[str]], table: pd.DataFrame, args: argparse.Namespace) -> pd.DataFrame:
+def generate_geneset_matrix(gset_LUT: dict[str, list[str]], table: pd.DataFrame, all_donors: list[str], args: argparse.Namespace) -> pd.DataFrame:
     # init dataframe
-    all_donors = sorted(list(table['donor'].unique()))
-    donor2cohort = table.drop_duplicates('donor').set_index('donor')['cohort'].to_dict()
+    # donor2cohort = table.drop_duplicates('donor').set_index('donor')['cohort'].to_dict()
 
     # init dataframe
     df = pd.DataFrame(index=all_donors)
 
-    # annotate membership & TMB
-    df['metastatic'] = donor2cohort
-    df['metastatic'] = df['metastatic'].map({'COMBI': 1, 'PPCG': 0})
-    df['metastatic'] = df['metastatic'].astype(int)
-    assert df['metastatic'].isna().sum() == 0
+    # # annotate membership & TMB
+    # df['metastatic'] = donor2cohort
+    # df['metastatic'] = df['metastatic'].map({'COMBI': 1, 'PPCG': 0})
+    # df['metastatic'] = df['metastatic'].astype(int)
+    # assert df['metastatic'].isna().sum() == 0
 
     # for each gene, add column annotating whether the donor has a mutation or not. 
     i = 0

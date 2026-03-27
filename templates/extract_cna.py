@@ -284,6 +284,7 @@ def load_cmdline_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description='Extracts CNA events from a PPCG donor SCNA file.')
     parser.add_argument('--scna', type=str, required=True, help='Path to Battenberg SCNA segments (for CCF estimation).')
     parser.add_argument('--gff', type=str, required=True, help='Path to GFF file containing gene coordinates.')
+    parser.add_argument('--loh', action='store_true', help='Whether to extract LOH events.')
     parser.add_argument('--wgd', action='store_true', help='Whether the sample has clonal WGD.')
     parser.add_argument('--allow-subclonal', action='store_true', help='Include segments where two states are observed (subclonal).')
     parser.add_argument('--allow-amp', action='store_true', help='Include amplifications.')

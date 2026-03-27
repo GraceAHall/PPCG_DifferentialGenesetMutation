@@ -16,3 +16,5 @@ fast_vs_slow.txt
 test/
 temp/
 templates/*.ipynb
+
+results/
