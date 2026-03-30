@@ -1,6 +1,5 @@
 
 
-
 TODO 
 1. Add LOH variants to extraction process 
     - nMinA 0, nMajA 1+ 
@@ -13,11 +12,18 @@ TODO
     - 
 COSMIC genes
 
-CNA assignments 
-- identify misscalls (two parts to solution, both similar CN states) & mask one of the parts 
-- reporting:
-    - was the interval clipped due to segment bounds? (overlapping)
-    - was the assignment inexact and the cost 
+CNA assignments
+- WGD: 
+    - include 2+2 and 2+0 (chrX) as normal copy number states. 
+    - check that the above doesn't result in weird shit in met samples.
+- validation:
+    - ensure that shit still works for a donor with only 2 samples. 
+- results:
+    - what is the chr, startpos, endpos of the segment?
+    - how many bases were clipped?
+    - is the interval in another segment? 
+    - was the tree parsimony exact or inexact?
+
 
 
 
