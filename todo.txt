@@ -1,4 +1,7 @@
 
+PPCG0442c GOT MUNCHED
+
+
 
 TODO 
 1. Add LOH variants to extraction process 
@@ -14,7 +17,6 @@ COSMIC genes
 
 CNA assignments
 - WGD: 
-    - include 2+2 and 2+0 (chrX) as normal copy number states. 
     - check that the above doesn't result in weird shit in met samples.
 - validation:
     - ensure that shit still works for a donor with only 2 samples. 
@@ -25,15 +27,72 @@ CNA assignments
     - was the tree parsimony exact or inexact?
 
 
+    PPCG0388: missing PPCG0388a_DNA (primary prostate). Clone assignment is therefore patchy / bad in general. 
+    PPCG0395: no truncal cluster. 
+    PPCG0425: no truncal cluster. 
+    PPCG0427: no truncal cluster. 
+    PPCG0428: no cluster which corresponds to a Primary Leaf, so the clone assignments are kinda weird. 
+    PPCG0434: no truncal cluster. 
+    PPCG0442: no truncal cluster. 
+    PPCG1062: Primary sample (PPCG1062a) has 100+ variant calls, but metastasis (PPCG1062c) only has 13. 
+    PPCG1072: no truncal cluster. 
 
 
+Erroneously high % trunk:
+- PPCG1062
+    - No leaf clone for primary (PPCG1062a). 
+    - Causes all private primary mutations to be erroneously assigned to the trunk. 
+    - PPCG1062 is suspicious in general as the metastasis sample PPCG1062c has no mutations. 
+    - primary is WGD while metastasis is not and has ~0% PGA. 
+    - primary is ~20% PGA (ignoring WGD)
+- PPCG1026
+    - No leaf clone for metastasis (PPCG1026c). 
+    - Causes all private secondary mutations to be erroneously assigned to the trunk. 
+
+Correctly high % trunk:
+- PPCG1008
+    - The high proportion assigned to trunk looks weird but it's correct. 
+    - All chromosomes have nearly identical CN profile across both primary (PPCG1008a) and metastasis (PPCG1008c).
+    - Exception is chr20 @ 11% modified in PPCG1008c.
+- PPCG1020
+    - The high proportion assigned to trunk looks weird but it's correct.
+    - Both primary (PPCG1020a) and metastasis (PPCG1020c) have identical CN state in 96% of altered regions -> "multiple samples, 1 CN state (%)" field. 
+    - interestingly, most chromosomes have low % altered except chr18 which is ~94% altered. 
+- PPCG0399
+    - same situation as PPCG1020 but PGA is higher. Chromosome 8 shows only major difference across samples. 
 
 
+Correctly low % trunk:
+- PPCG0395
+    - primary (PPCG0395a) and metastasis (PPCG0395c) simply have different CN profiles in most chromosomes.  
+- PPCG0424
+    - primary (PPCG0424a) ~0% PGA, recurrence (PPCG0424c) ~5% PGA. 
+- PPCG0425
+    - only 2 metastasis samples. 
+    - one (PPCG0425c) has ~40% PGA but the other (PPCG0425a) has ~0% PGA. 
+- PPCG0428
+    - primary (PPCG0428a) has ~30% PGA, both mets have near zero. 
+    - note: clone 3 is a primary leaf rather than a seed (as annotated in the DPClust CCFs file)
+- PPCG0434
+    - primary (PPCG0425c) has ~40% PGA but the other (PPCG0425a) has ~0% PGA. 
+- PPCG1028 
+    - both the trunk and clone 2 (seed) are present in primary & metastasis sample so clone 2 absorbs some assignments which would usually go to the trunk depending on CCF 
 
-
-
-
-
+WARNING: Same segment, different CN states
+- PPCG0180
+    - Primary is diploid while mets are WGD which causes CN states in the same segment to often differ by 2+
+- PPCG1052 
+    - Primary (PPCG1052a) is diploid while metastasis (PPCG1052c) is WGD 
+    - Explains why most common CN state in primary is 1+0 while in metastasis it's 2+1 and 2+0. 
+- PPCG0087 
+    - Both primary and metastasis samples are WGD with frequent amplifications. 
+    - One sample might be 4+3 and the other 4+1 etc. 
+    - Primary (PPCG0087c) does have quite frequent shallow deletion 1+0 though. 
+    - Keep an eye on this one though. 
+- PPCG0435
+    - Same as PPCG1052
+- PPCG1040
+    - Same as PPCG1052 but reverse (primary is WGD, metastasis is diploid)
 
 
 

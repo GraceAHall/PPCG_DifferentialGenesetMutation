@@ -99,35 +99,58 @@ process EXTRACT_CNA {
 
     input:
     tuple val(sample), val(meta), path(scna)
-    path gff
+    path cosmic
 
     output:
     path "${sample}.cna.tsv"
 
     script:
-    def wgd               = meta.wgd                         ? '--wgd' : ''
-    def allow_subclonal   = params.cnavars.allow_subclonal   ? '--allow-subclonal' : ''
-    def allow_amp         = params.cnavars.allow_amp         ? '--allow-amp' : ''
-    def allow_deep_del    = params.cnavars.allow_deep_del    ? '--allow-deep-del' : ''
-    def allow_shallow_del = params.cnavars.allow_shallow_del ? '--allow-shallow-del' : ''
-    def allow_noncoding   = params.cnavars.allow_noncoding   ? '--allow-noncoding' : ''
-    def allow_chrX        = params.cnavars.allow_chrX        ? '--allow-x' : ''
+    def wgd = meta.wgd ? '--wgd' : ''
     """
     python ${params.scripts.extract_cna} \
         --scna ${scna} \
-        --gff ${gff} \
-        --min-span ${params.cnavars.min_span} \
+        --cosmic ${cosmic} \
         ${wgd} \
-        ${allow_subclonal} \
-        ${allow_amp} \
-        ${allow_deep_del} \
-        ${allow_shallow_del} \
-        ${allow_noncoding} \
-        ${allow_chrX} \
         --outfile ${sample}.cna.tsv
     """
 
 }
+
+// process EXTRACT_CNA {
+
+//     publishDir "${params.outputs_dir}/${params.run_id}/variant_extraction/cna", mode: 'symlink'
+
+//     input:
+//     tuple val(sample), val(meta), path(scna)
+//     path gff
+
+//     output:
+//     path "${sample}.cna.tsv"
+
+//     script:
+//     def wgd               = meta.wgd                         ? '--wgd' : ''
+//     def allow_subclonal   = params.cnavars.allow_subclonal   ? '--allow-subclonal' : ''
+//     def allow_amp         = params.cnavars.allow_amp         ? '--allow-amp' : ''
+//     def allow_deep_del    = params.cnavars.allow_deep_del    ? '--allow-deep-del' : ''
+//     def allow_shallow_del = params.cnavars.allow_shallow_del ? '--allow-shallow-del' : ''
+//     def allow_noncoding   = params.cnavars.allow_noncoding   ? '--allow-noncoding' : ''
+//     def allow_chrX        = params.cnavars.allow_chrX        ? '--allow-x' : ''
+//     """
+//     python ${params.scripts.extract_cna} \
+//         --scna ${scna} \
+//         --gff ${gff} \
+//         --min-span ${params.cnavars.min_span} \
+//         ${wgd} \
+//         ${allow_subclonal} \
+//         ${allow_amp} \
+//         ${allow_deep_del} \
+//         ${allow_shallow_del} \
+//         ${allow_noncoding} \
+//         ${allow_chrX} \
+//         --outfile ${sample}.cna.tsv
+//     """
+
+// }
 
 
 process MERGE_VARIANTS {

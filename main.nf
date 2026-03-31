@@ -26,6 +26,7 @@ include { SUMMARISE_RESULTS } from './modules/contrast'
 genesets        = file(params.genesets)
 hgnc            = file(params.hgnc_path)
 gff             = file(params.gencode_gff_path)
+cosmic          = file(params.cosmic_gene_locations)
 
 Channel.fromPath(params.samplesheet)
     | splitCsv(header: true, sep: '\t')
@@ -76,7 +77,7 @@ workflow {
     ch_svs      = EXTRACT_STRUCTVARS(ch_svs_snpeff)
     ch_indels   = EXTRACT_INDELS(ch_indels_raw, 'INDEL')
     ch_snvs     = EXTRACT_SNVS(ch_snvs_raw, 'SNV')
-    ch_cna      = EXTRACT_CNA(ch_cna_raw, gff)
+    ch_cna      = EXTRACT_CNA(ch_cna_raw, cosmic)
     
     // merge variants into single table
     MERGE_VARIANTS(
@@ -90,27 +91,7 @@ workflow {
     // filter variants & harmonise gene symbols between various data sources
     STANDARDISE_AND_FILTER_VARIANTS(ch_merged, genesets, gff, hgnc) 
     ch_filtered = STANDARDISE_AND_FILTER_VARIANTS.out.mutations
-    
-    // // assign mutations to clones. 
-    // // any donor with 2+ samples is expected to have a phylogenetic tree. 
-    // ch_trees_dir = Channel.fromPath("${params.basedir}/data/phylogeny_angel/trees", type: 'dir')
-    // ch_ccfs_dir = Channel.fromPath("${params.basedir}/data/phylogeny_angel/dpclust", type: 'dir')
-    // mettraj_clones = file("${params.basedir}/data/phylogeny_angel/met_trajectory_clones.tsv")
-    // ch_assigned = ASSIGN_CLONES(ch_filtered, ch_trees_dir, ch_ccfs_dir, mettraj_clones, ch_samplesheet) 
 
-
-
-    // // --- COHORT CONTRASTS --- //
-    // // define contrasts 
-    // ch_cohorts      = ch_samplesheet | splitCsv(header: true, sep: '\t') | map { row -> row.cohort } | unique
-    // ch_contrasts    = ch_cohorts    | combine(ch_data) | combine(ch_samplesheet) | SPLIT_MUTATIONS
-    
-    // // for each contrast do...
-    // ch_contrasts | SINGLE_GENE_ANALYSIS
-    // ch_selected     = ch_contrasts | SELECT_GENESETS
-    // ch_dif_mutate   = ch_contrasts | join(ch_selected) | DIFFERENTIAL_MUTATION
-    // ch_bkg_enrich   = ch_contrasts | join(ch_selected) | BACKGROUND_ENRICHMENT
-    // ch_results      = ch_contrasts | join(ch_selected) | join(ch_dif_mutate) | join(ch_bkg_enrich) | SUMMARISE_RESULTS
 
 }
 
@@ -126,3 +107,23 @@ workflow {
 //     // general
 //     ch_mutations = ASSIGN_CLONES_PLACEHOLDER(MERGE_VARIANTS.out.merged)
 // }
+
+
+    // // assign mutations to clones. 
+    // // any donor with 2+ samples is expected to have a phylogenetic tree. 
+    // ch_trees_dir = Channel.fromPath("${params.basedir}/data/phylogeny_angel/trees", type: 'dir')
+    // ch_ccfs_dir = Channel.fromPath("${params.basedir}/data/phylogeny_angel/dpclust", type: 'dir')
+    // mettraj_clones = file("${params.basedir}/data/phylogeny_angel/met_trajectory_clones.tsv")
+    // ch_assigned = ASSIGN_CLONES(ch_filtered, ch_trees_dir, ch_ccfs_dir, mettraj_clones, ch_samplesheet) 
+
+    // // --- COHORT CONTRASTS --- //
+    // // define contrasts 
+    // ch_cohorts      = ch_samplesheet | splitCsv(header: true, sep: '\t') | map { row -> row.cohort } | unique
+    // ch_contrasts    = ch_cohorts    | combine(ch_data) | combine(ch_samplesheet) | SPLIT_MUTATIONS
+    
+    // // for each contrast do...
+    // ch_contrasts | SINGLE_GENE_ANALYSIS
+    // ch_selected     = ch_contrasts | SELECT_GENESETS
+    // ch_dif_mutate   = ch_contrasts | join(ch_selected) | DIFFERENTIAL_MUTATION
+    // ch_bkg_enrich   = ch_contrasts | join(ch_selected) | BACKGROUND_ENRICHMENT
+    // ch_results      = ch_contrasts | join(ch_selected) | join(ch_dif_mutate) | join(ch_bkg_enrich) | SUMMARISE_RESULTS

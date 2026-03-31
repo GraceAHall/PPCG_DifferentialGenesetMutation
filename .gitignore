@@ -17,4 +17,7 @@ test/
 temp/
 templates/*.ipynb
 
+# binaries
+*.pyc
+
 results/
