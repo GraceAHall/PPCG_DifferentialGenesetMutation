@@ -15,7 +15,7 @@ pd.options.display.float_format = '{:.2f}'.format
 def main() -> None:
     args = load_cmdline_args()
 
-    # load 
+    # load battenberg
     df = load_battenberg(args.scna, minspan=100)
     validate_battenberg(df)
     df = explode_parts(df, wgd=args.wgd)
@@ -23,11 +23,9 @@ def main() -> None:
     df = filter_segments_normal(df)
     df = annotate_alterations(df)
 
-    # variant segs 
-    segs = extract_variant_segments(df, args.wgd)
-
-    # variant genes 
+    # variants
     cosmic = load_cosmic(args.cosmic)
+    segs = extract_variant_segments(df, args.wgd)
     genes = extract_variant_genes(cosmic, segs)
     assert genes['gene'].nunique() == genes.shape[0]
 
@@ -154,6 +152,10 @@ def explode_parts(seg: pd.DataFrame, wgd: bool) -> pd.DataFrame:
     return df.copy()
 
 def annotate_alterations(df: pd.DataFrame) -> pd.DataFrame:
+    if df.shape[0] == 0:
+        df['vtype'] = None
+        df['LOH'] = None
+        return df 
     df['vtype'] = df.apply(_annotate_vtype, axis=1)
     df['LOH'] = df.apply(_annotate_loh, axis=1)
     return df 
@@ -162,6 +164,31 @@ def annotate_alterations(df: pd.DataFrame) -> pd.DataFrame:
 #################################
 ### IDENTIFY ALTERED SEGMENTS ###
 #################################
+
+def extract_variant_segments(table: pd.DataFrame, wgd: bool) -> pd.DataFrame:
+    df = table.copy()
+    
+    # identify variant segments 
+    deepdels = extract_deepdels(df)
+    bigamps = extract_bigamps(df, wgd)
+    loh = extract_loh(df)
+
+    # remove LOH segments if also called as other variant types (priority)
+    dd_coords = set(deepdels['coords'].unique())
+    ba_coords = set(bigamps['coords'].unique())
+    assert len(dd_coords & ba_coords) == 0
+    loh = loh[~loh['coords'].isin(dd_coords | ba_coords)].copy()
+
+    # combine into single frame 
+    deepdels['variant'] = 'deep_deletion'
+    bigamps['variant'] = 'amplification'
+    loh['variant'] = 'LOH'
+    var_df = pd.concat([deepdels, bigamps, loh], ignore_index=True)
+    var_df = var_df.sort_values('coords')
+    
+    # sanity
+    assert var_df.shape[0] == var_df['coords'].nunique()
+    return var_df
 
 def extract_deepdels(table: pd.DataFrame) -> pd.DataFrame:
     df = table.copy()
@@ -189,31 +216,6 @@ def extract_loh(table: pd.DataFrame) -> pd.DataFrame:
     df = df[df['frac']>0.5].copy()
     assert df.shape[0] == df['coords'].nunique()
     return df
-
-def extract_variant_segments(table: pd.DataFrame, wgd: bool) -> pd.DataFrame:
-    df = table.copy()
-    
-    # identify variant segments 
-    deepdels = extract_deepdels(df)
-    bigamps = extract_bigamps(df, wgd)
-    loh = extract_loh(df)
-
-    # remove LOH segments if also called as other variant types (priority)
-    dd_coords = set(deepdels['coords'].unique())
-    ba_coords = set(bigamps['coords'].unique())
-    assert len(dd_coords & ba_coords) == 0
-    loh = loh[~loh['coords'].isin(dd_coords | ba_coords)].copy()
-
-    # combine into single frame 
-    deepdels['variant'] = 'deep_deletion'
-    bigamps['variant'] = 'amplification'
-    loh['variant'] = 'LOH'
-    var_df = pd.concat([deepdels, bigamps, loh], ignore_index=True)
-    var_df = var_df.sort_values('coords')
-    
-    # sanity
-    assert var_df.shape[0] == var_df['coords'].nunique()
-    return var_df
 
 
 #################################

@@ -40,7 +40,7 @@ def main() -> None:
 
     print('\ndropping duplicates...')    
     print(muts.shape)
-    muts = muts.drop_duplicates(subset=['sample', 'coords', 'gene', 'vclass'])
+    muts = muts.drop_duplicates(subset=['sample', 'vclass', 'coords', 'gene'])
     print(muts.shape)
     print()
 

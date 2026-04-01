@@ -105,7 +105,7 @@ process EXTRACT_CNA {
     path "${sample}.cna.tsv"
 
     script:
-    def wgd = meta.wgd ? '--wgd' : ''
+    def wgd = meta.wgd == 'True' ? '--wgd' : ''
     """
     python ${params.scripts.extract_cna} \
         --scna ${scna} \

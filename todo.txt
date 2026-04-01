@@ -2,40 +2,20 @@
 PPCG0442c GOT MUNCHED
 
 
-
-TODO 
-1. Add LOH variants to extraction process 
-    - nMinA 0, nMajA 1+ 
-2. Latency analysis: Seeding trajectories
+Still TODO:
+- How to handle LOH? 
+- Update clone assignment to new class.
+- Perform assignments & send mutations to Angel.
+- Metastasis association re-run.
+    - Use seeding lineages (1+ per donor) rather than only Trunk mutations. 
+- Latency association re-run.
     - Use seeding lineages (1+ per donor) rather than only Trunk mutations. 
     - Linear mixed-effects model test (donor=experimental structure)
-3. Redo CNA assignments
-    - Send all CNA assignments to Angel (deep del, shallow del, )
-4. Metastasis genesets 
-    - 
-COSMIC genes
+{'PPCG0395', 'PPCG0428', 'PPCG1062', 'PPCG0434', 'PPCG0425', 'PPCG0424'}
 
-CNA assignments
-- WGD: 
-    - check that the above doesn't result in weird shit in met samples.
-- validation:
-    - ensure that shit still works for a donor with only 2 samples. 
-- results:
-    - what is the chr, startpos, endpos of the segment?
-    - how many bases were clipped?
-    - is the interval in another segment? 
-    - was the tree parsimony exact or inexact?
-
-
-    PPCG0388: missing PPCG0388a_DNA (primary prostate). Clone assignment is therefore patchy / bad in general. 
-    PPCG0395: no truncal cluster. 
-    PPCG0425: no truncal cluster. 
-    PPCG0427: no truncal cluster. 
-    PPCG0428: no cluster which corresponds to a Primary Leaf, so the clone assignments are kinda weird. 
-    PPCG0434: no truncal cluster. 
-    PPCG0442: no truncal cluster. 
-    PPCG1062: Primary sample (PPCG1062a) has 100+ variant calls, but metastasis (PPCG1062c) only has 13. 
-    PPCG1072: no truncal cluster. 
+PPCG0388: missing sample 'PPCG0388a' from DPClust CCFs 
+PPCG0435: missing clone '11' from CONIPHER tree
+PPCG1000: one quarter of site-parsimony assignments are inexact (worst)
 
 
 Erroneously high % trunk:

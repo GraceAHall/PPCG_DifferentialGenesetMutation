@@ -10,37 +10,31 @@ from scipy.stats import fisher_exact
 
 from fileio import load_mutations
 from fileio import load_gmt
-
-from filtering import (
-    filter_ppcg_control,
-    filter_donors_without_prostate,
-    filter_donors_without_dpclust,
-    filter_donors_without_trees,
-    filter_primary_leaves,
-    filter_secondary_leaves,
-    filter_hypermutators
-)
+from filtering import filter_hypermutators
+from selection import select_genesets
 
 from reporting import (
     summarise_basic_info,
     summarise_vclasses,
+    summarise_annotations,
     summarise_donors,
     plot_distribution
 )
 
-from selection import select_genesets
-
-from formatting import generate_gene_matrix
-from formatting import generate_gene_matrix_4genesets
-from formatting import prepare_gsea_matrix
 from formatting import generate_geneset_matrix
 
-from stats import run_fisher_gene_association
-from stats import run_logit_gene_association
-from stats import run_logit_gset_association
-from stats import run_geneset_combined
-from stats import run_ssgsea
-from stats import test_ssgsea_scores
+
+# from formatting import generate_gene_matrix
+# from formatting import generate_gene_matrix_4genesets
+# from formatting import prepare_gsea_matrix
+# from formatting import generate_geneset_matrix
+
+# from stats import run_fisher_gene_association
+# from stats import run_logit_gene_association
+# from stats import run_logit_gset_association
+# from stats import run_geneset_combined
+# from stats import run_ssgsea
+# from stats import test_ssgsea_scores
 
 import warnings
 warnings.filterwarnings('ignore')
@@ -51,29 +45,16 @@ pd.set_option('display.max_columns', None)
 pd.set_option('display.max_rows', 200)
 pd.set_option('display.width', 180)
 
-INFILE_MUTATIONS = '/home/grace/work/PPCG_DifferentialGenesetMutation/data/manual/mutations.assigned.160326.tsv'
-INFILE_SIZES = '/home/grace/work/PPCG_DifferentialGenesetMutation/outputs/angel_mutations_all_donors/variant_processing/sizes.tsv'
-INFILE_SHEET = '/home/grace/work/PPCG_DifferentialGenesetMutation/samplesheet.angel.alldonors.tsv'
-INFILE_HGNC = '/home/grace/work/PPCG_DifferentialGenesetMutation/data/supporting/hgnc/hgnc_complete_set.txt'
-# INFILE_GENESETS = '/home/grace/work/PPCG_DifferentialGenesetMutation/data/genesets/c2.cp.kegg_medicus.v2026.1.Hs.symbols.gmt'
+# INFILE_MUTATIONS = '/home/grace/work/PPCG_DifferentialGenesetMutation/data/manual/mutations.assigned.160326.tsv'
+# INFILE_SIZES = '/home/grace/work/PPCG_DifferentialGenesetMutation/outputs/angel_mutations_all_donors/variant_processing/sizes.tsv'
+# INFILE_SHEET = '/home/grace/work/PPCG_DifferentialGenesetMutation/samplesheet.angel.alldonors.tsv'
+# INFILE_HGNC = '/home/grace/work/PPCG_DifferentialGenesetMutation/data/supporting/hgnc/hgnc_complete_set.txt'
 # INFILE_GENESETS = '/home/grace/work/PPCG_DifferentialGenesetMutation/data/genesets/c2.cp.reactome.v2026.1.Hs.symbols.gmt'
 # INFILE_GENESETS = '/home/grace/work/PPCG_DifferentialGenesetMutation/data/genesets/h.all.v2026.1.Hs.symbols.gmt'
-INFILE_GENESETS = '/home/grace/work/PPCG_DifferentialGenesetMutation/data/genesets/c5.go.bp.v2026.1.Hs.symbols.gmt'
-INDIR_DPCLUST = '/home/grace/work/PPCG_DifferentialGenesetMutation/data/angel/dpclust_ccf'
-INDIR_CONIPHER = '/home/grace/work/PPCG_DifferentialGenesetMutation/data/angel/conipher_trees'
-# TARGETS = ['CDKN1B','CRIP1','EZH2','MEF2C','PLA2G4','PLA2G4','SLC9A1','TP53']
-
-# filepath = '/home/grace/work/PPCG_DifferentialGenesetMutation/downstream/results/GOBP/enrichment.tsv'
-# df = pd.read_csv(filepath, sep='\t', header=0)
-# TARGETS = set(df[df['significant']==True]['geneset'].unique())
-    
-    # banned = ['TP53', 'PTEN']
-    # muts = muts[~muts['gene'].isin(banned)].copy()
-    # mat = generate_gene_matrix(muts, args)
-    # res_gene = do_gene_enrichment(mat, args)
-    # res_gset = do_geneset_enrichment_combp(muts, res_gene, args)
-    # res_gset = do_geneset_enrichment_gsea(muts, mat, args)
-    # gset_LUT = {k: v for k, v in gset_LUT.items() if k in TARGETS}
+# INFILE_GENESETS = '/home/grace/work/PPCG_DifferentialGenesetMutation/data/genesets/c5.go.bp.v2026.1.Hs.symbols.gmt'
+# INFILE_GENESETS = '/home/grace/work/PPCG_DifferentialGenesetMutation/data/genesets/c2.cp.kegg_medicus.v2026.1.Hs.symbols.gmt'
+# INDIR_DPCLUST = '/home/grace/work/PPCG_DifferentialGenesetMutation/data/angel/dpclust_ccf'
+# INDIR_CONIPHER = '/home/grace/work/PPCG_DifferentialGenesetMutation/data/angel/conipher_trees'
 
 
 def main():
@@ -85,12 +66,9 @@ def main():
 
     # mutations
     muts = load_mutations(args.muts, args.sheet)
-    print()
-    print(muts.groupby(['cohort', 'asmt'])['donor'].nunique().unstack().fillna(0).astype(int))
 
     # filtering
-    # muts = filter_mutations(muts, args)
-    muts = filter_mutations_alt(muts, args)
+    muts = filter_mutations(muts, args)
 
     # reporting
     report_mutations(muts, args)
@@ -99,29 +77,44 @@ def main():
     gset_LUT = load_gmt(args.gmt)
     gset_LUT, sel = select_genesets(gset_LUT, muts)
     
-    # background enrichment
-    donors = set(muts[muts['cohort']=='COMBI']['donor'].unique())
-    seq_muts = muts[(muts['cohort']=='COMBI') & (muts['vclass'].isin(['SNV', 'INDEL']))].copy()
-    struct_muts = muts[(muts['cohort']=='COMBI') & (muts['vclass']=='SV')].copy()
-    seqmat = generate_gene_matrix_4genesets(seq_muts, donors, args)
-    structmat = generate_gene_matrix_4genesets(struct_muts, donors, args)
-    print(seqmat.shape)
-    print(structmat.shape)
-    do_geneset_enrichment_bootstrapping(gset_LUT, seqmat, structmat, args)
+    # enrichment
+    fisher_association(muts, gset_LUT, args)
+    sys.exit()
+    logistic_association(muts, gset_LUT, args)
+    background_enrichment(muts, gset_LUT, args)
 
-    # logistic test
-    mat = generate_geneset_matrix(gset_LUT, muts, args)
-    burden_LUT = muts.groupby('donor')['gene'].nunique().to_dict()
-    res_logit = run_logit_gset_association(mat, burden_LUT=burden_LUT)
-    res_logit = res_logit.sort_values('p_value')
-    print('\nLOGIT')
-    print(res_logit.shape)
-    print(res_logit.head(10))
-    outfile_logit = f"{args.outdir}/{args.run_id}/logit.tsv"
-    res_logit.to_csv(outfile_logit, sep='\t', index=False, float_format='%.5f')
 
-    # fisher test
-    res_fish = do_geneset_enrichment_groupmeans(gset_LUT, muts, args)
+#########################
+### STATISTICAL TESTS ###
+#########################
+
+def background_enrichment(muts: pd.DataFrame, gset_LUT: dict, args: argparse.Namespace) -> None:
+    raise NotImplementedError
+    # donors = set(muts[muts['cohort']=='COMBI']['donor'].unique())
+    # seq_muts = muts[(muts['cohort']=='COMBI') & (muts['vclass'].isin(['SNV', 'INDEL']))].copy()
+    # struct_muts = muts[(muts['cohort']=='COMBI') & (muts['vclass']=='SV')].copy()
+    # seqmat = generate_gene_matrix_4genesets(seq_muts, donors, args)
+    # structmat = generate_gene_matrix_4genesets(struct_muts, donors, args)
+    # print(seqmat.shape)
+    # print(structmat.shape)
+    # do_geneset_enrichment_bootstrapping(gset_LUT, seqmat, structmat, args)
+
+def logistic_association(muts: pd.DataFrame, gset_LUT: dict, args: argparse.Namespace) -> None:
+    all_donors = sorted(list(muts['donor'].unique()))
+    mat = generate_geneset_matrix(gset_LUT, muts, all_donors)
+    raise NotImplementedError
+    # mat = generate_geneset_matrix(gset_LUT, muts, args)
+    # burden_LUT = muts.groupby('donor')['gene'].nunique().to_dict()
+    # res_logit = run_logit_gset_association(mat, burden_LUT=burden_LUT)
+    # res_logit = res_logit.sort_values('p_value')
+    # print('\nLOGIT')
+    # print(res_logit.shape)
+    # print(res_logit.head(10))
+    # outfile_logit = f"{args.outdir}/{args.run_id}/logit.tsv"
+    # res_logit.to_csv(outfile_logit, sep='\t', index=False, float_format='%.5f')
+
+def fisher_association(muts: pd.DataFrame, gset_LUT: dict, args: argparse.Namespace) -> None:
+    res_fish = _do_fisher_association(gset_LUT, muts)
     res_fish = res_fish.sort_values('p_value')
     print('\nFISHER')
     print(res_fish.shape)
@@ -129,7 +122,7 @@ def main():
     outfile_fish = f"{args.outdir}/{args.run_id}/fisher.tsv"
     res_fish.to_csv(outfile_fish, sep='\t', index=False, float_format='%.5f')
 
-def do_geneset_enrichment_groupmeans(gset_LUT: dict[str, list[str]], muts: pd.DataFrame, args: argparse.Namespace) -> pd.DataFrame:
+def _do_fisher_association(gset_LUT: dict[str, list[str]], muts: pd.DataFrame) -> pd.DataFrame:
     
     # Define a function to apply the test to each row
     def apply_fisher_test(row):
@@ -164,6 +157,121 @@ def do_geneset_enrichment_groupmeans(gset_LUT: dict[str, list[str]], muts: pd.Da
 
     df = df[[x for x in df.columns if x!='geneset']+['geneset']].copy()
     return df 
+
+#################
+### REPORTING ###
+#################
+
+def report_settings(args: argparse.Namespace) -> None:
+    outfile_settings = f"{args.outdir}/{args.run_id}/settings.txt"
+    
+    original_stdout = sys.stdout
+    with open(outfile_settings, 'w') as f:
+        sys.stdout = f
+        print('Arguments for this analysis ---\n')
+        for arg_name, arg_value in vars(args).items():
+            print(f"- {arg_name}: {arg_value}")
+    sys.stdout = original_stdout
+
+def report_mutations(muts: pd.DataFrame, args: argparse.Namespace) -> None:
+    df = muts.copy()
+    outfile_report = f"{args.outdir}/{args.run_id}/mutation_summary.txt"
+    outfile_plot = f"{args.outdir}/{args.run_id}/mutation_hist.png"
+    
+    print(f'writing report to {outfile_report}')
+    original_stdout = sys.stdout
+    with open(outfile_report, 'w') as f:
+        sys.stdout = f
+        summarise_basic_info(df)
+        summarise_vclasses(df)
+        summarise_annotations(df)
+        summarise_donors(df)
+    sys.stdout = original_stdout
+
+    print(f'writing plot to {outfile_plot}')
+    plot_distribution(df, filepath=outfile_plot)
+
+
+################################################################
+### LOADING MUTATIONS, FILTERING MUTATIONS, CREATING COHORTS ###
+################################################################
+
+def filter_mutations(df: pd.DataFrame, args: argparse.Namespace) -> pd.DataFrame:
+    print('filtering donors/mutations')
+    df = df[df['annotation']!='LOH'].copy()
+    df_ppcg = df[df['cohort']=='PPCG'].copy()
+    df_combi = df[df['cohort']=='COMBI'].copy()
+    df_combi = filter_seedtraj_donors(df_combi, args)
+    df_combi = filter_seedtraj_mutations(df_combi, args)
+    df_combi = filter_hypermutators(df_combi, max_mutated_genes=args.hypermutator_ngenes)
+    df_ppcg = filter_hypermutators(df_ppcg, max_mutated_genes=args.hypermutator_ngenes)
+    df_ppcg = pick_matched_cohort(df_ppcg, df_combi)
+
+    df = pd.concat([df_ppcg, df_combi], ignore_index=True)
+    return df 
+
+def filter_seedtraj_donors(table: pd.DataFrame, args: argparse.Namespace) -> pd.DataFrame:
+    df = table.copy()
+    meta = pd.read_csv(args.clone_meta, sep='\t', header=0)
+    target_donors = set(meta['patient'].unique())
+    df = df[df['donor'].isin(target_donors)].copy()
+    return df 
+    
+def filter_seedtraj_mutations(table: pd.DataFrame, args: argparse.Namespace) -> pd.DataFrame:
+    df = table.copy()
+
+    donor2clones = dict()
+    meta = pd.read_csv(args.clone_meta, sep='\t', header=0)
+    meta['clone'] = meta['clone'].astype(str)
+    for donor, donor_df in meta.groupby('patient'):
+        # get clones considered on seeding trajectory
+        path_clones = set()
+        for traj in donor_df['ancestors'].values:
+            nodelist = traj.split('-')
+            nodelist = nodelist[:-1]
+            assert len(nodelist) >= 1
+            path_clones.update(nodelist)
+        donor2clones[donor] = path_clones
+
+    df['seeding_trajectory'] = False 
+    for donor in df['donor'].unique():
+        mask = (df['donor']==donor) & (df['clone'].isin(donor2clones[donor]))
+        df.loc[mask, 'seeding_trajectory'] = True 
+    df = df[df['seeding_trajectory']==True].copy()
+    df = df.drop('seeding_trajectory', axis=1)
+    return df.copy()
+
+def pick_matched_cohort(df_ppcg: pd.DataFrame, df_combi: pd.DataFrame) -> pd.DataFrame:
+    c_counts = df_combi.groupby(['vclass', 'donor'])['gene'].nunique().unstack().fillna(0).astype(int)
+    p_counts = df_ppcg.groupby(['vclass', 'donor'])['gene'].nunique().unstack().fillna(0).astype(int)
+    selected = set()
+
+    c_donors = sorted(list(df_combi['donor'].unique()))
+    p_donors = sorted(list(df_ppcg['donor'].unique()))
+    for c_donor in c_donors:
+        diffs = []
+        for p_donor in p_donors:
+            if p_donor in selected:
+                continue
+            c = c_counts[c_donor]
+            p = p_counts[p_donor]
+            d = c-p 
+            d = d.abs()
+            diff = d.sum()
+            diffs.append((p_donor, diff))
+        diffs = sorted(diffs, key=lambda x: x[1])
+        sel = diffs[0][0]
+        # print('\nSELECTED')
+        # print()
+        # print(c_counts[c_donor])
+        # print()
+        # print(p_counts[sel])
+        selected.add(sel)
+    
+    df = df_ppcg[df_ppcg['donor'].isin(selected)].copy()
+    return df
+
+
 
 
 def do_geneset_enrichment_bootstrapping(
@@ -554,8 +662,6 @@ def do_geneset_enrichment_gsea(muts: pd.DataFrame, mat: pd.DataFrame, args: argp
     sns.clustermap(data=scores.loc[targets].astype(float), col_colors=col_colors, figsize=(40, 20))
     plt.savefig(outfile_clustermap, dpi=300)
     plt.close()
-    
-
 
 def do_geneset_enrichment_combp(muts: pd.DataFrame, res_gene: pd.DataFrame, args: argparse.Namespace) -> pd.DataFrame:
     print('running gene set enrichment tests')
@@ -610,140 +716,55 @@ def do_gene_enrichment(df: pd.DataFrame, args: argparse.Namespace) -> pd.DataFra
     res.to_csv(outfile_comb, sep='\t', index=False, float_format='%.5f')
     return res
 
-def report_settings(args: argparse.Namespace) -> None:
-    outfile_settings = f"{args.outdir}/{args.run_id}/settings.txt"
+
+# def filter_mutations(df: pd.DataFrame, args: argparse.Namespace) -> pd.DataFrame:
+#     print('filtering donors/mutations')
+#     df_ppcg = df[df['cohort']=='PPCG'].copy()
+#     df_combi = df[df['cohort']=='COMBI'].copy()
     
-    original_stdout = sys.stdout
-    with open(outfile_settings, 'w') as f:
-        sys.stdout = f
-        print('Arguments for this analysis ---\n')
-        for arg_name, arg_value in vars(args).items():
-            print(f"- {arg_name}: {arg_value}")
-    sys.stdout = original_stdout
-
-def report_mutations(muts: pd.DataFrame, args: argparse.Namespace) -> None:
-    df = muts.copy()
-    outfile_report = f"{args.outdir}/{args.run_id}/mutation_summary.txt"
-    outfile_plot = f"{args.outdir}/{args.run_id}/mutation_hist.png"
+#     if not args.ppcg_all:
+#         df_ppcg = filter_ppcg_control(df_ppcg)
     
-    print(f'writing report to {outfile_report}')
-    original_stdout = sys.stdout
-    with open(outfile_report, 'w') as f:
-        sys.stdout = f
-        summarise_basic_info(df)
-        summarise_vclasses(df)
-        summarise_donors(df)
-    sys.stdout = original_stdout
+#     if not args.combi_all:
+#         df_combi = filter_donors_without_prostate(df_combi)
+#         df_combi = filter_donors_without_dpclust(df_combi, args.dpclust_dir)
+#         df_combi = filter_donors_without_trees(df_combi, args.conipher_dir)
 
-    print(f'writing plot to {outfile_plot}')
-    plot_distribution(df, filepath=outfile_plot)
+#     if args.filter_primary_leaves:
+#         df_combi = filter_primary_leaves(df_combi, verbose=True)
+#     if args.filter_secondary_leaves:
+#         df_combi = filter_secondary_leaves(df_combi, verbose=True)
 
-def filter_mutations(df: pd.DataFrame, args: argparse.Namespace) -> pd.DataFrame:
-    print('filtering donors/mutations')
-    df_ppcg = df[df['cohort']=='PPCG'].copy()
-    df_combi = df[df['cohort']=='COMBI'].copy()
-    
-    if not args.ppcg_all:
-        df_ppcg = filter_ppcg_control(df_ppcg)
-    
-    if not args.combi_all:
-        df_combi = filter_donors_without_prostate(df_combi)
-        df_combi = filter_donors_without_dpclust(df_combi, args.dpclust_dir)
-        df_combi = filter_donors_without_trees(df_combi, args.conipher_dir)
-
-    if args.filter_primary_leaves:
-        df_combi = filter_primary_leaves(df_combi, verbose=True)
-    if args.filter_secondary_leaves:
-        df_combi = filter_secondary_leaves(df_combi, verbose=True)
-
-    df = pd.concat([df_ppcg, df_combi], ignore_index=True)
-    df = filter_hypermutators(df, max_mutated_genes=args.hypermutator_ngenes)
-    return df 
+#     df = pd.concat([df_ppcg, df_combi], ignore_index=True)
+#     df = filter_hypermutators(df, max_mutated_genes=args.hypermutator_ngenes)
+#     return df 
 
 
-def filter_mutations_alt(df: pd.DataFrame, args: argparse.Namespace) -> pd.DataFrame:
-    print('filtering donors/mutations')
-    df = df[df['vclass']!='CNA'].copy()
-    df_ppcg = df[df['cohort']=='PPCG'].copy()
-    df_combi = df[df['cohort']=='COMBI'].copy()
-    
-    df_combi = filter_donors_without_prostate(df_combi)
-    # df_combi = filter_donors_without_dpclust(df_combi, args.dpclust_dir)
-    df_combi = filter_donors_without_trees(df_combi, args.conipher_dir)
-    df_combi = df_combi[df_combi['asmt'].isin(['Primary:Trunk', 'Primary:Branch', 'Primary:Seed'])].copy()
-    df_combi = filter_hypermutators(df_combi, max_mutated_genes=args.hypermutator_ngenes)
-    df_ppcg = filter_hypermutators(df_ppcg, max_mutated_genes=args.hypermutator_ngenes)
-    df_ppcg = pick_matched_cohort(df_ppcg, df_combi)
-
-    # if not args.ppcg_all:
-        # df_ppcg = filter_ppcg_control(df_ppcg)
-    # if args.filter_primary_leaves:
-    #     df_combi = filter_primary_leaves(df_combi, verbose=True)
-    # if args.filter_secondary_leaves:
-    #     df_combi = filter_secondary_leaves(df_combi, verbose=True)
-
-    df = pd.concat([df_ppcg, df_combi], ignore_index=True)
-    return df 
-
-def pick_matched_cohort(df_ppcg: pd.DataFrame, df_combi: pd.DataFrame) -> pd.DataFrame:
-    c_counts = df_combi.groupby(['vclass', 'donor'])['gene'].nunique().unstack().fillna(0).astype(int)
-    p_counts = df_ppcg.groupby(['vclass', 'donor'])['gene'].nunique().unstack().fillna(0).astype(int)
-    selected = set()
-
-    c_donors = sorted(list(df_combi['donor'].unique()))
-    p_donors = sorted(list(df_ppcg['donor'].unique()))
-    for c_donor in c_donors:
-        diffs = []
-        for p_donor in p_donors:
-            if p_donor in selected:
-                continue
-            c = c_counts[c_donor]
-            p = p_counts[p_donor]
-            d = c-p 
-            d = d.abs()
-            diff = d.sum()
-            diffs.append((p_donor, diff))
-        diffs = sorted(diffs, key=lambda x: x[1])
-        sel = diffs[0][0]
-        # print('\nSELECTED')
-        # print()
-        # print(c_counts[c_donor])
-        # print()
-        # print(p_counts[sel])
-        selected.add(sel)
-    
-    df = df_ppcg[df_ppcg['donor'].isin(selected)].copy()
-    return df
 
 def load_cmdline_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description='Runs downstream mutation analysis.')
-    
-    # run ID
     parser.add_argument('--run-id', type=str, default='default', help='ID for this analysis.')
     parser.add_argument('--outdir', type=str, default='./results', help='Path to output directory.')
+    parser.add_argument('--gmt', type=str, required=True, help='Path to msigdb genesets .gmt file.')
+    parser.add_argument('--muts', type=str, required=True, help='Path to assigned mutations file.')
+    parser.add_argument('--sheet', type=str, required=True, help='Path to samplesheet (metadata).')
+    parser.add_argument('--sizes', type=str, required=True, help='Path to gene sizes.')
+    parser.add_argument('--clone-meta', type=str, required=True, help='Path to Angel metastatic clone metadata.')
+    parser.add_argument('--hypermutator-ngenes', type=int, default=700, help="Number of mutated genes defining a hypermutator")
 
-    # files
-    parser.add_argument('--muts', type=str, default=INFILE_MUTATIONS, help='Path to assigned mutations file.')
-    parser.add_argument('--sizes', type=str, default=INFILE_SIZES, help='Path to gene sizes.')
-    parser.add_argument('--sheet', type=str, default=INFILE_SHEET, help='Path to samplesheet (metadata).')
-    parser.add_argument('--hgnc', type=str, default=INFILE_HGNC, help='Path to hgnc_complete_set.txt')
-    parser.add_argument('--gmt', type=str, default=INFILE_GENESETS, help='Path to msigdb genesets .gmt file.')
-    parser.add_argument('--dpclust-dir', type=str, default=INDIR_DPCLUST, help='Path to DPClust folder')
-    parser.add_argument('--conipher-dir', type=str, default=INDIR_CONIPHER, help='Path to conipher folder')
+    # parser.add_argument('--gmt', type=str, default=INFILE_GENESETS, help='Path to msigdb genesets .gmt file.')
+    # parser.add_argument('--muts', type=str, default=INFILE_MUTATIONS, help='Path to assigned mutations file.')
+    # parser.add_argument('--sizes', type=str, default=INFILE_SIZES, help='Path to gene sizes.')
+    # parser.add_argument('--hgnc', type=str, default=INFILE_HGNC, help='Path to hgnc_complete_set.txt')
+    # parser.add_argument('--dpclust-dir', type=str, default=INDIR_DPCLUST, help='Path to DPClust folder')
+    # parser.add_argument('--conipher-dir', type=str, default=INDIR_CONIPHER, help='Path to conipher folder')
     
     # donor selection
-    parser.add_argument('--ppcg-all', action='store_true', help="Use all PPCG donors rather than the 65 donor control group")
-    parser.add_argument('--combi-all', action='store_true', help="Use all COMBI donors rather than the 65 with good trees")
-    parser.add_argument('--hypermutator-ngenes', type=int, default=500, help="Number of mutated genes defining a hypermutator")
 
-    # mutation selection
-    parser.add_argument('--filter-secondary-leaves', action='store_true', help="Remove private secondary mutations in COMBI donors")
-    parser.add_argument('--filter-primary-leaves', action='store_true', help="Remove private primary mutations in COMBI donors")
-    
-    # gene selection
-    parser.add_argument('--top-genes', type=int, default=0, help="Only keep the <--top-genes> most commonly mutated genes")
-    parser.add_argument('--min-cohort-prop', type=float, default=0.0, help="Only keep genes mutated above this proportion across both cohorts")
-    parser.add_argument('--min-combi-prop', type=float, default=0.0, help="Only keep genes mutated above this proportion in combimets cohort")
+    # # gene selection
+    # parser.add_argument('--top-genes', type=int, default=0, help="Only keep the <--top-genes> most commonly mutated genes")
+    # parser.add_argument('--min-cohort-prop', type=float, default=0.0, help="Only keep genes mutated above this proportion across both cohorts")
+    # parser.add_argument('--min-combi-prop', type=float, default=0.0, help="Only keep genes mutated above this proportion in combimets cohort")
 
 
     args = parser.parse_args()

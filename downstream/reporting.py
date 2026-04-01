@@ -43,6 +43,24 @@ def summarise_vclasses(df: pd.DataFrame) -> None:
         counts = counts.astype(int)
         print(counts)
 
+def summarise_annotations(df: pd.DataFrame) -> None:
+    print('\n--- Variant Annotations ---')
+    annotations = sorted(list(df['annotation'].unique()))
+
+    for clsmem in df['cohort'].unique():
+        print()
+        print(f'[{clsmem}]')
+        dfslice = df[df['cohort']==clsmem].drop_duplicates('ID')
+        counts = pd.DataFrame(index=annotations)
+        counts['vars'] = dfslice['annotation'].value_counts()
+        counts['genes'] = dfslice.groupby('annotation')['gene'].nunique()
+        counts['donors'] = dfslice.groupby('annotation')['donor'].nunique()
+        
+        for annot in annotations:
+            counts.loc[annot, 'med. vars p/donor'] = round(dfslice[dfslice['annotation']==annot]['donor'].value_counts().median(), 0)
+        counts = counts.astype(int)
+        print(counts)
+
 def top_genes(df: pd.DataFrame) -> None:
     print('\n--- Gene Summary (stratified by variant class) ---')
     for clsmem in df['cohort'].unique():
